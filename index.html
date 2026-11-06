@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e0b16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>カメラで回数カウント</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e0b16;--sf:#17131f;--sf2:#211b2d;--ink:#ece9f3;--mut:#a7a1b6;--line:#2f2841;--acc:#6a4bd1;--acc2:#9a84f0;--ok:#3fbf9a;--warn:#e7a93c;
+--f-d:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;--f-n:"IBM Plex Mono",ui-monospace,Menlo,monospace;--f-b:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--f-b);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+[hidden]{display:none!important}
+/* live view */
+#live{position:fixed;inset:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
+#stage{position:relative;overflow:hidden;background:#000;min-height:0}
+#stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.mir{transform:scaleX(-1)}
+#hud{position:absolute;left:0;right:0;top:0;display:flex;align-items:flex-start;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px));background:linear-gradient(#000a,#0000);pointer-events:none}
+#hud .t{flex:1;min-width:0}
+#exn{font:700 17px/1.3 var(--f-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#setn{font:600 13px var(--f-n);color:var(--mut)}
+.chip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:99px;font-size:12.5px;font-weight:700;background:#ffffff26;color:#fff}
+.chip.ok{background:var(--ok);color:#06251c}.chip.warn{background:var(--warn);color:#2a1b00}
+#note{display:block;font-size:11.5px;color:var(--mut);margin-top:4px}
+#cfg{pointer-events:auto;border:0;border-radius:10px;padding:8px 12px;background:#ffffff24;color:#fff;font-weight:700;font-size:14px}
+#depth{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:30%;bottom:16%;width:16px;border-radius:9px;background:#ffffff22;overflow:hidden}
+#dfill{position:absolute;left:0;right:0;bottom:0;height:0;background:var(--acc);transition:height .08s linear}
+#depth.hit #dfill{background:var(--ok)}
+#dsh{position:absolute;left:0;right:0;height:2px;background:var(--warn)}
+#ang{position:absolute;right:max(6px,env(safe-area-inset-right,0px));bottom:calc(16% - 26px);font:600 13px var(--f-n);color:#fff;text-shadow:0 1px 3px #000;min-width:28px;text-align:center}
+#flash{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);padding:10px 18px;border-radius:12px;background:var(--warn);color:#2a1b00;font:700 20px var(--f-d);opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+#flash.on{opacity:1}
+#cd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 min(40vw,40vh)/1 var(--f-n);color:#fff;text-shadow:0 4px 24px #000a;pointer-events:none}
+.msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,440px);max-height:90%;overflow:auto;background:var(--sf);border:1px solid var(--line);border-radius:16px;padding:18px}
+.msg h2{margin:0 0 6px;font:700 18px var(--f-d)}
+.msg p{margin:0 0 10px;color:var(--mut);font-size:14px}
+.msg ol{margin:0 0 12px;padding-left:20px;font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--sf2);font-weight:700;min-height:48px}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}
+#panel{background:var(--sf);border-top:1px solid var(--line);padding:10px max(12px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px}
+#cnt{display:flex;align-items:baseline;gap:10px}
+#reps{font:600 64px/1 var(--f-n);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+#goal{font:600 22px var(--f-n);color:var(--mut)}
+#side{margin-left:auto;text-align:right;font-size:13px;color:var(--mut)}
+#side b{font:600 15px var(--f-n);color:var(--warn)}
+#btns{display:grid;grid-template-columns:1.7fr 1fr 1fr 1.7fr;gap:8px}
+#btns .btn{white-space:nowrap}
+#btns .btn{padding:10px 6px;font-size:15px}
+#bgo.run{background:var(--sf2);border-color:var(--acc2);color:var(--acc2)}
+@media (orientation:landscape){
+ #live{grid-template-rows:none;grid-template-columns:minmax(0,1fr) minmax(230px,34%)}
+ #panel{border-top:0;border-left:1px solid var(--line);justify-content:center;overflow:auto;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+ #cnt{flex-wrap:wrap}
+ #side{margin-left:0;text-align:left;width:100%}
+ #btns{grid-template-columns:1fr 1fr}
+ #bgo,#bend{grid-column:span 2}
+ #depth{top:22%;bottom:18%}
+}
+@media (orientation:landscape) and (max-height:430px){#reps{font-size:52px}#btns .btn{min-height:42px;padding:6px}}
+/* setup sheet */
+#setup{position:fixed;inset:0;z-index:30;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;animation:dn .22s ease-out}
+@keyframes dn{from{transform:translateY(-24px);opacity:0}}
+.wrap{max-width:560px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.wrap h1{font:700 22px/1.3 var(--f-d);margin:4px 0 2px}
+.priv{font-size:12.5px;color:var(--ok);margin:0 0 12px}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font:700 14px var(--f-d);color:var(--acc2);letter-spacing:.04em}
+.f{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+.f>label,.f>.l{flex:0 0 84px;font-size:13.5px;color:var(--mut)}
+.f select{flex:1;min-width:0;max-width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--sf2)}
+.num{display:flex;align-items:center;gap:6px}
+.num input{width:64px;text-align:center;padding:9px 4px;border-radius:10px;border:1px solid var(--line);background:var(--sf2);font:600 18px var(--f-n)}
+.num button{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--sf2);font-size:14px}
+.seg{display:flex;flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg label{flex:1;text-align:center}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;padding:10px 4px;font-size:14px;font-weight:700;color:var(--mut)}
+.seg input:checked+span{background:var(--acc);color:#fff}
+.seg input:focus-visible+span{outline:2px solid var(--acc2);outline-offset:-2px}
+.rng{flex:1;min-width:150px}
+.rng input{width:100%;accent-color:var(--acc)}
+.rng .ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut)}
+.vv{font:600 13px var(--f-n);color:var(--acc2)}
+.guide{background:var(--sf2);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.guide .pic{display:block;font:500 12.5px var(--f-n);color:var(--acc2);margin-top:4px;white-space:pre;overflow-x:auto}
+.guide small{display:block;color:var(--warn);margin-top:4px}
+.small{font-size:12px;color:var(--mut);margin:6px 0 0}
+#sgo{width:100%;font-size:17px}
+/* rest timer */
+.restv{position:fixed;inset:0;z-index:50;background:#0f141c;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.rest-fill{position:absolute;left:0;right:0;bottom:0;height:0%;background:hsl(220 70% 45%)}
+.rest-in{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:24px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));width:100%;max-width:520px}
+#tm-name{font:700 17px var(--f-d)}
+#tm-set{font-size:13px;opacity:.8}
+#tm-t{font:600 clamp(72px,22vw,128px)/1 var(--f-n);font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin:6px 0}
+@media (orientation:landscape) and (max-height:430px){#tm-t{font-size:min(28vh,110px)}.rest-in{gap:4px}}
+#tm-sub{font-size:14px;opacity:.85}
+.tm-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.tm-btns button{border:0;border-radius:10px;padding:12px 16px;font-weight:700;font-size:15px;background:rgba(255,255,255,.18);color:#fff;min-width:76px}
+/* summary */
+#sum{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;overflow-x:hidden}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:center}
+th{font-size:12.5px;color:var(--mut);font-weight:700}
+td{font:600 17px var(--f-n)}
+td.sh{color:var(--warn)}
+#rec{font:600 15px var(--f-n);background:var(--sf2);border-radius:10px;padding:10px 12px;margin:12px 0 8px;word-break:break-all}
+</style>
+</head>
+<body>
+<main id="live">
+ <div id="stage">
+  <video id="vid" playsinline muted autoplay></video>
+  <canvas id="cv"></canvas>
+  <div id="hud">
+   <div class="t"><div id="exn"></div><div id="setn"></div><span class="chip" id="chip">準備中</span><span id="note"></span></div>
+   <button type="button" id="cfg">設定</button>
+  </div>
+  <div id="depth" aria-hidden="true"><div id="dfill"></div><div id="dsh" hidden></div></div>
+  <div id="ang"></div>
+  <div id="flash">もう少し深く</div>
+  <div id="cd" hidden></div>
+  <div class="msg" id="msg" hidden></div>
+ </div>
+ <section id="panel" aria-label="カウンター">
+  <div id="cnt"><span id="reps" aria-live="polite">0</span><span id="goal">/ 10</span><span id="side">浅い <b id="shn">0</b> 回</span></div>
+  <div id="btns">
+   <button type="button" class="btn p" id="bgo">スタート</button>
+   <button type="button" class="btn" id="bm" aria-label="1回減らす">−1</button>
+   <button type="button" class="btn" id="bp" aria-label="1回増やす">+1</button>
+   <button type="button" class="btn" id="bend">セット終了</button>
+  </div>
+ </section>
+</main>
+
+<div id="setup" role="dialog" aria-label="設定">
+ <div class="wrap">
+  <h1>カメラで回数カウント</h1>
+  <p class="priv">映像は端末の中だけで処理します。動画も画像も外部へは送信しません。</p>
+  <div class="card">
+   <h3>種目</h3>
+   <div class="f"><label for="s-ex">種目</label><select id="s-ex"></select></div>
+   <div class="guide" id="s-guide"></div>
+   <div class="f"><span class="l">目標回数</span><div class="num"><button type="button" data-n="s-goal" data-d="-1" aria-label="目標回数を減らす">▼</button><input id="s-goal" type="number" inputmode="numeric" min="1" max="100" value="10" aria-label="目標回数"><button type="button" data-n="s-goal" data-d="1" aria-label="目標回数を増やす">▲</button></div></div>
+   <div class="f"><span class="l">セット数</span><div class="num"><button type="button" data-n="s-sets" data-d="-1" aria-label="セット数を減らす">▼</button><input id="s-sets" type="number" inputmode="numeric" min="1" max="10" value="3" aria-label="セット数"><button type="button" data-n="s-sets" data-d="1" aria-label="セット数を増やす">▲</button></div></div>
+  </div>
+  <div class="card">
+   <h3>カウント方法</h3>
+   <div class="f"><div class="seg" role="radiogroup" aria-label="カウント方法"><label><input type="radio" name="mode" value="cam" checked><span>カメラ</span></label><label><input type="radio" name="mode" value="tempo"><span>テンポ（3秒）</span></label></div></div>
+   <p class="small">テンポ：カメラで見えない種目用。3秒ごとに1回数えます。</p>
+   <div class="f"><span class="l">カメラ</span><div class="seg" role="radiogroup" aria-label="カメラ"><label><input type="radio" name="cam" value="user" checked><span>前面</span></label><label><input type="radio" name="cam" value="environment"><span>背面</span></label></div></div>
+   <div class="f"><label for="s-depth">深さ調整</label><div class="rng"><input id="s-depth" type="range" min="-15" max="15" step="1" value="0"><div class="ends"><span>浅めでOK</span><span class="vv" id="s-depth-v">±0°</span><span>深く求める</span></div></div></div>
+  </div>
+  <div class="card">
+   <h3>トレーナー</h3>
+   <div class="f"><span class="l">性別</span><div class="seg" role="radiogroup" aria-label="性別"><label><input type="radio" name="vg" value="f" checked><span>女性</span></label><label><input type="radio" name="vg" value="m"><span>男性</span></label></div></div>
+   <div class="f"><label for="s-lvl">口調</label><div class="rng"><input id="s-lvl" type="range" min="0" max="4" step="1" value="2"><div class="ends"><span>甘い</span><span class="vv" id="s-lvl-v">ふつう</span><span>ドS</span></div></div></div>
+   <div class="f"><label for="s-voice">声</label><select id="s-voice"><option value="">おまかせ</option></select></div>
+   <div class="f"><span class="l">声と音</span><div class="seg" role="radiogroup" aria-label="声と音"><label><input type="radio" name="snd" value="on" checked><span>オン</span></label><label><input type="radio" name="snd" value="off"><span>オフ</span></label></div></div>
+   <button type="button" class="btn" id="s-try" style="width:100%">声を試しに聞く</button>
+  </div>
+  <button type="button" class="btn p" id="sgo">この設定ではじめる</button>
+  <p class="small">スマホを固定して置き、画面の明るさは自動で消えないようにします（対応端末のみ）。</p>
+ </div>
+</div>
+
+<div class="restv" id="rest" hidden role="timer">
+ <div class="rest-fill" id="tm-fill"></div>
+ <div class="rest-in"><span id="tm-name"></span><span id="tm-set"></span><b id="tm-t">0:00</b><span id="tm-sub">休憩中</span>
+  <div class="tm-btns"><button type="button" id="tm-m">−15秒</button><button type="button" id="tm-p">+15秒</button><button type="button" id="tm-x">閉じる</button></div></div>
+</div>
+
+<div id="sum" hidden>
+ <div class="wrap">
+  <h1>おつかれさまでした</h1>
+  <p class="small" id="sum-h"></p>
+  <div class="card"><table><thead><tr><th>セット</th><th>回数</th><th>浅い</th></tr></thead><tbody id="sum-b"></tbody></table>
+   <div id="rec"></div>
+   <button type="button" class="btn p" id="copy" style="width:100%">記録をコピー</button>
+   <p class="small" id="copied" aria-live="polite"></p>
+   <p class="small">トレーニング記録アプリは別のページなので、ここで数えた回数は自動では共有できません。コピーして、記録アプリの回数欄へ入力してください。</p>
+  </div>
+  <div class="row"><button type="button" class="btn p" id="again">同じ設定でもう一度</button><button type="button" class="btn" id="tocfg">設定を変える</button></div>
+ </div>
+</div>
+
+<script id="rep-core">
+/* 回数判定のコア（DOMに依存しない）。window.__rep で公開 */
+(function(G){
+const LEG=[[23,25,27],[24,26,28]],HIP=[[11,23,25],[12,24,26]],ARM=[[11,13,15],[12,14,16]];
+const SIDE='横向きに置き、全身が入る距離（2〜3m）';
+const KINDS={
+ knee:{lbl:'膝',j:LEG,dir:-1,peak:100,rest:160,sh:125,cue:['もう少し深くいこう','浅い。もっと深く'],guide:SIDE,pic:'[スマホ] ‥‥ 2〜3m ‥‥ 人（真横）'},
+ hinge:{lbl:'股関節',j:HIP,dir:-1,peak:110,rest:160,sh:135,cue:['もう少しお尻を引こう','浅い。もっとお尻を引いて'],guide:SIDE,pic:'[スマホ] ‥‥ 2〜3m ‥‥ 人（真横）'},
+ thrust:{lbl:'股関節',j:HIP,dir:1,peak:165,rest:120,sh:150,cue:['もう少し腰を上げよう','浅い。腰を上まで'],guide:'横から、肩・腰・膝が入る距離（床か低い台に置く）',pic:'[スマホ] ‥‥ 2m ‥‥ ベンチ＋人（真横）'},
+ press:{lbl:'肘',j:ARM,dir:-1,peak:95,rest:160,sh:120,cue:['もう少し深く下ろそう','浅い。もっと下ろして'],guide:'ベンチ：頭側か足側の斜め上から、肘が見える位置。立って行う種目は横から',pic:'[スマホ]↘ 斜め上 ‥ 1.5m ‥ ベンチ'},
+ pushup:{lbl:'肘',j:ARM,dir:-1,peak:95,rest:160,sh:120,cue:['もう少し深くいこう','浅い。胸を床まで'],guide:'横向き、床に置いて少し上向き（1.5〜2m）',pic:'[スマホ]↗ 床 ‥ 1.5〜2m ‥ 人（真横）'},
+ pullup:{lbl:'肘',j:ARM,dir:-1,peak:80,rest:150,sh:105,above:1,cue:['もう少し上まで引こう','浅い。あごをバーの上まで'],guide:'正面、頭からお尻まで入る距離',pic:'[スマホ] ‥‥ 2〜3m ‥‥ 人（正面）'},
+ lat:{lbl:'肘',j:ARM,dir:-1,peak:80,rest:150,sh:105,cue:['もう少し引き切ろう','浅い。もっと引いて'],guide:'正面か斜め前、頭から腰まで入る距離',pic:'[スマホ] ‥‥ 2m ‥‥ 人（正面）'},
+ row:{lbl:'肘',j:ARM,dir:-1,peak:80,rest:150,sh:105,cue:['もう少し引き切ろう','浅い。もっと引いて'],guide:'横向き、肩・肘・手首が見える位置',pic:'[スマホ] ‥‥ 2m ‥‥ 人（真横）'},
+ curl:{lbl:'肘',j:ARM,dir:-1,peak:60,rest:150,sh:90,note:'小さい動きは誤差が出やすい',cue:['もう少し巻き上げよう','浅い。最後まで巻いて'],guide:'横向き、肩から手首まで入る位置',pic:'[スマホ] ‥‥ 1.5m ‥‥ 人（真横）'},
+ ext:{lbl:'肘',j:ARM,dir:1,peak:160,rest:90,sh:140,cue:['もう少し伸ばそう','浅い。伸ばし切って'],guide:'横向き、肩・肘・手首が見える位置',pic:'[スマホ] ‥‥ 1.5m ‥‥ 人（真横）'},
+ legext:{lbl:'膝',j:LEG,dir:1,peak:160,rest:100,sh:140,cue:['もう少し伸ばそう','浅い。伸ばし切って'],guide:'横向き、腰・膝・足首が見える位置',pic:'[スマホ] ‥‥ 1.5m ‥‥ マシン（真横）'},
+ raise:{lbl:'肩',j:[[23,11,15],[24,12,16]],dir:1,peak:75,rest:25,sh:55,cue:['もう少し上げよう','浅い。肩の高さまで'],guide:'正面、腰から手先まで入る距離（2m前後）',pic:'[スマホ] ‥‥ 2m ‥‥ 人（正面）'},
+ calf:{lbl:'かかと',j:[[25,27,29,31],[26,28,30,32]],calf:1,dir:1,peak:8,rest:3,sh:5.5,os:.2,unit:'%',cue:['もう少しかかとを上げよう','浅い。もっと高く'],guide:'横向き、床に置いて膝から足先まで入る位置',pic:'[スマホ] 床 ‥ 1m ‥ 足元（真横）'},
+ legraise:{lbl:'股関節',j:HIP,dir:-1,peak:100,rest:160,sh:125,cue:['もう少し脚を上げよう','浅い。脚をもっと高く'],guide:'横向き、肩・腰・膝が入る距離',pic:'[スマホ] ‥‥ 2〜3m ‥‥ 人（真横）'},
+ osc:{lbl:'上下',osc:1,amp:6,os:.2,unit:'%',cue:['',''],guide:'全身が入る位置に固定（肩と腰の上下の往復で数えます）',pic:'[スマホ] ‥‥ 2〜3m ‥‥ 人'}
+};
+// [種目名, 判定, 休憩秒]  休憩：多関節2〜3分→150 / 単関節60〜90秒→75 / 体幹45 / カーフ60
+const LIST=[
+ ['バックスクワット','knee',150],['スクワット（ゆっくり下ろす）','knee',150],['ゴブレット・スクワット','knee',150],['ブルガリアン・スクワット','knee',150],['ダンベル・ランジ','knee',150],['ジャンプスクワット','knee',150],['ステップアップ','knee',150],['レッグプレス','knee',150],['ハックスクワット','knee',150],['シシースクワット','knee',75],
+ ['ルーマニアン・デッドリフト','hinge',150],['ダンベル・ルーマニアンDL','hinge',150],['シングルレッグRDL','hinge',150],['片脚ルーマニアンDL','hinge',150],['45°バックエクステンション','hinge',75],
+ ['ヒップスラスト','thrust',150],['ダンベル・ヒップスラスト','thrust',150],['片脚ヒップリフト','thrust',150],['グルートブリッジ','thrust',75],
+ ['ベンチプレス','press',150],['ダンベルプレス','press',150],['インクライン・ダンベルプレス','press',150],['マシン・チェストプレス','press',150],['ナローベンチプレス','press',150],['ディップス','press',150],['椅子ディップス','press',150],['ベンチディップス','press',75],['オーバーヘッドプレス','press',150],['ダンベル・ショルダープレス','press',150],['マシン・ショルダープレス','press',150],['アーノルドプレス','press',150],
+ ['プッシュアップ','pushup',150],['足上げプッシュアップ','pushup',150],['ダイヤモンド・プッシュアップ','pushup',150],['パイク・プッシュアップ','pushup',150],
+ ['懸垂','pullup',150],['チンアップ（逆手懸垂）','pullup',150],['ラットプルダウン','lat',150],
+ ['バーベルロウ','row',150],['ワンハンド・ダンベルロウ','row',150],['ダンベル・ベントオーバーロウ','row',150],['シーテッド・ケーブルロウ','row',150],['チェストサポート・ロウ','row',150],['斜め懸垂','row',150],['テーブル・インバーテッドロウ','row',150],
+ ['EZバーカール','curl',75],['ダンベルカール','curl',75],['インクライン・ダンベルカール','curl',75],['ハンマーカール','curl',75],['タオルカール','curl',75],
+ ['ケーブル・プレスダウン','ext',75],['オーバーヘッド・ケーブルエクステンション','ext',75],['フレンチプレス','ext',75],['キックバック','ext',75],['レッグエクステンション','legext',75],
+ ['サイドレイズ','raise',75],['ケーブル・サイドレイズ','raise',75],['リアレイズ','raise',75],['リアデルト・フライ','raise',75],
+ ['スタンディング・カーフレイズ','calf',60],['シーテッド・カーフレイズ','calf',60],['ダンベル・カーフレイズ（段差）','calf',60],['片脚カーフレイズ','calf',60],
+ ['ハンギング・レッグレイズ','legraise',45],['レッグレイズ','legraise',45],
+ ['アブローラー','osc',45],['その他（動きの往復）','osc',75]
+];
+// EXR：種目名・関節の組・向き(dir)・下限(peak)/戻り(rest)の閾値・浅いときのセリフ
+const EXR=LIST.map(([name,k,rest])=>Object.assign({name,kind:k,restSec:rest},KINDS[k]));
+// 角度（画像のピクセル比で計算）
+function ang(a,b,c,W,H){const ax=(a.x-b.x)*W,ay=(a.y-b.y)*H,cx=(c.x-b.x)*W,cy=(c.y-b.y)*H,d=Math.hypot(ax,ay)*Math.hypot(cx,cy);
+ return d?Math.acos(Math.max(-1,Math.min(1,(ax*cx+ay*cy)/d)))*180/Math.PI:null}
+// 1フレームの関節点から判定用の値を取り出す。見えないときは {why}
+function measure(lm,k,W,H){
+ if(!lm||lm.length<33)return {why:'none'};
+ const z=lm.every(p=>!p.visibility),inF=p=>p.x>-.02&&p.x<1.02&&p.y>-.02&&p.y<1.02;
+ const vis=p=>z?(inF(p)?1:0):(inF(p)?p.visibility:0);
+ const mv=ids=>Math.min(...ids.map(i=>vis(lm[i])));
+ if(k.osc){const ids=[11,12,23,24],m=mv(ids);if(m<.5)return {why:'vis',ids};return {v:100*ids.reduce((s,i)=>s+lm[i].y,0)/4,ids,vis:m}}
+ let best=null;for(const ids of k.j){const m=mv(ids);if(!best||m>best.m)best={ids,m}}
+ const ids=best.ids;if(best.m<.5)return {why:'vis',ids};
+ let v;
+ if(k.calf){const [kn,an,he,to]=ids.map(i=>lm[i]),sh=Math.hypot((kn.x-an.x)*W,(kn.y-an.y)*H);if(!sh)return {why:'vis',ids};v=100*(to.y-he.y)*H/sh}
+ else v=ang(lm[ids[0]],lm[ids[1]],lm[ids[2]],W,H);
+ if(v==null)return {why:'vis',ids};
+ if(k.above&&lm[ids[2]].y>lm[ids[0]].y+.03)return {why:'above',ids};
+ return {v,ids,vis:best.m};
+}
+// 回数の状態機械：UP（戻り位置）→ DOWN（深さ到達）→ UP で1回。浅い往復は shallow
+class Rep{
+ constructor(k,o){o=o||{};this.k=k;this.minGap=o.minGap!=null?o.minGap:500;this.setOffset(o.offset||0);this.reset()}
+ setOffset(o){const k=this.k,s=(k.os||1)*o;this.off=o;
+  if(k.osc){this.amp=Math.max(1,k.amp+s);return}
+  this.peak=k.peak+k.dir*s;this.rest=k.rest;let sh=k.sh+k.dir*s;
+  const lo=Math.min(this.rest,this.peak),hi=Math.max(this.rest,this.peak);if(!(sh>lo&&sh<hi))sh=(this.rest+this.peak)/2;this.sh=sh}
+ reset(){this.st='INIT';this.n=0;this.shallow=0;this.ext=null;this.ref=null;this.last=-1e9}
+ past(x,th){return this.k.dir<0?x<th:x>th}
+ progress(v){if(v==null)return 0;if(this.k.osc)return this.ref==null?0:Math.abs(v-this.ref)/this.amp;return (v-this.rest)/(this.peak-this.rest)}
+ shPos(){return this.k.osc?null:(this.sh-this.rest)/(this.peak-this.rest)}
+ _count(t,type){if(t-this.last<this.minGap)return {type:'skip'};this.last=t;if(type==='rep')this.n++;else this.shallow++;return {type,n:this.n,shallow:this.shallow}}
+ push(v,t){
+  if(v==null||!isFinite(v))return null;
+  if(this.k.osc)return this._osc(v,t);
+  const atRest=this.k.dir<0?v>this.rest:v<this.rest;let ev=null;
+  if(this.st==='INIT'){if(atRest){this.st='UP';this.ext=v}}
+  else if(this.st==='UP'){
+   if(this.past(v,this.peak)){this.st='DOWN';this.ext=v}
+   else{if(this.ext==null||this.past(v,this.ext))this.ext=v;
+    if(atRest){if(this.past(this.ext,this.sh))ev=this._count(t,'shallow');this.ext=v}}
+  }else if(atRest){ev=this._count(t,'rep');this.st='UP';this.ext=v}
+  return ev;
+ }
+ _osc(v,t){let ev=null;
+  if(this.ref==null){this.ref=v;this.st='UP';return null}
+  const d=v-this.ref;
+  if(this.st!=='DOWN'){if(Math.abs(d)>this.amp){this.st='DOWN';this.sg=Math.sign(d)}else this.ref+=.02*d}
+  else if(d*this.sg<this.amp*.35){ev=this._count(t,'rep');this.st='UP'}
+  return ev}
+}
+G.__rep={Rep,KINDS,EXR,measure,ang};
+})(typeof window!=='undefined'?window:globalThis);
+</script>
+
+<script type="module" id="app">
+const $=id=>document.getElementById(id);
+const {Rep,EXR,measure}=window.__rep;
+const MP='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const SKEY='camera-count-v1';
+/* ---------- 設定 ---------- */
+const DEF={ex:'バックスクワット',goal:10,sets:3,vg:'f',lvl:2,vname:'',snd:'on',cam:'user',depth:0,mode:'cam'};
+let S=Object.assign({},DEF);
+try{const o=JSON.parse(localStorage.getItem(SKEY)||'{}');if(o&&typeof o==='object')Object.keys(DEF).forEach(k=>{if(o[k]!=null&&typeof o[k]===typeof DEF[k])S[k]=o[k]})}catch(e){}
+if(!EXR.some(e=>e.name===S.ex))S.ex=DEF.ex;
+function save(){try{localStorage.setItem(SKEY,JSON.stringify(S))}catch(e){}}
+const SL=['甘い','やさしい','ふつう','きびしめ','ドS'];
+const clampN=(x,a,b,d)=>{x=Math.round(+x);return isFinite(x)?Math.min(b,Math.max(a,x)):d};
+const radio=(n,v)=>{const el=document.querySelector('input[name="'+n+'"][value="'+v+'"]');if(el)el.checked=true};
+const rv=n=>(document.querySelector('input[name="'+n+'"]:checked')||{}).value;
+const exSel=$('s-ex');
+{let grp='',h='';const G={knee:'脚',hinge:'お尻・裏もも',thrust:'お尻・裏もも',press:'押す（胸・肩・腕）',pushup:'押す（胸・肩・腕）',pullup:'引く（背中）',lat:'引く（背中）',row:'引く（背中）',curl:'腕',ext:'腕',legext:'脚',raise:'肩',calf:'ふくらはぎ',legraise:'体幹',osc:'その他'};
+ const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+ EXR.forEach(e=>{const g=G[e.kind];if(g!==grp){h+=(grp?'</optgroup>':'')+'<optgroup label="'+g+'">';grp=g}h+='<option value="'+esc(e.name)+'">'+esc(e.name)+'</option>'});exSel.innerHTML=h+'</optgroup>'}
+function toForm(){exSel.value=S.ex;$('s-goal').value=S.goal;$('s-sets').value=S.sets;radio('vg',S.vg);$('s-lvl').value=S.lvl;radio('snd',S.snd);radio('cam',S.cam);$('s-depth').value=S.depth;radio('mode',S.mode);labels()}
+function fromForm(){S.ex=exSel.value;S.goal=clampN($('s-goal').value,1,100,10);S.sets=clampN($('s-sets').value,1,10,3);S.vg=rv('vg')||'f';S.lvl=clampN($('s-lvl').value,0,4,2);S.vname=$('s-voice').value;S.snd=rv('snd')||'on';S.cam=rv('cam')||'user';S.depth=clampN($('s-depth').value,-15,15,0);S.mode=rv('mode')||'cam';save()}
+function exr(){return EXR.find(e=>e.name===S.ex)||EXR[0]}
+function labels(){const d=+$('s-depth').value;$('s-depth-v').textContent=(d>0?'+':d<0?'−':'±')+Math.abs(d)+'°';$('s-lvl-v').textContent=SL[clampN($('s-lvl').value,0,4,2)];
+ const e=EXR.find(x=>x.name===exSel.value)||EXR[0],g=$('s-guide');g.textContent='置き方：'+e.guide;
+ const p=document.createElement('span');p.className='pic';p.textContent=e.pic;g.appendChild(p);
+ if(e.note){const n=document.createElement('small');n.textContent='注意：'+e.note;g.appendChild(n)}}
+document.querySelectorAll('.num button').forEach(b=>b.addEventListener('click',()=>{const i=$(b.dataset.n);i.value=clampN(+i.value+ +b.dataset.d,+i.min,+i.max,+i.min)}));
+['s-depth','s-lvl'].forEach(id=>$(id).addEventListener('input',labels));exSel.addEventListener('change',labels);
+document.querySelectorAll('input[name="vg"]').forEach(r=>r.addEventListener('change',()=>{S.vg=rv('vg');pickVoice();fillVoices()}));
+/* ---------- 声と音 ---------- */
+const LK=['start','half','two','last','done','early','restStart','rest10','restEnd','allDone'];
+// 1行＝10フレーズを「|」区切りで（順番は LK と同じ）
+function LN(s){const a=s.split('|');if(a.length!==LK.length)throw new Error('LINES: '+s.slice(0,20));return Object.fromEntries(LK.map((k,i)=>[k,a[i]]))}
+// 口調5段階を並べる。文字列1つ＝男女共通、[女性,男性]＝男女別 → LINES[方言][性別][段階]
+function LV(...lv){const f=[],m=[];lv.forEach(x=>{const a=Array.isArray(x)?x:[x,x];const F=LN(a[0]),M=a[1]===a[0]?F:LN(a[1]);f.push(F);m.push(M)});return {f,m}}
+const STD3='スタート|半分|あと2回|ラスト一回|セット完了|セット終了|休憩、{t}|あと10秒|次のセット|この種目、完了';
+const LINES={
+std:LV(
+ ['ちゃんと見てるからね。はい、スタート|半分だよ。すごく上手|あと2回。いっしょに数えるね|ラスト一回。だいじょうぶ、できるよ|できたね。えらい、えらい|ここまでがんばれたね。それで十分だよ|おつかれさま。{t}、ゆっくり休もうね|あと10秒。深呼吸しよ|そろそろいこっか。いっしょにがんばろ|この種目おしまい。ほんとによくがんばったね',
+  '大丈夫、ついてる。スタート|半分。いいぞ、その調子|あと2回。いっしょにいこう|ラスト一回。信じてるぞ|よくやった。誇っていい|ここまでで十分だ。よくがんばった|おつかれ。{t}、ゆっくり休め|あと10秒。深呼吸だ|そろそろいこうか。いっしょにな|この種目は終わりだ。本当によくやった'],
+ ['準備いい？スタート|半分きたよ、いい調子|あと2回、がんばって|ラスト一回、ていねいにね|ナイス！おつかれさま|おつかれさま。次はもう少しいけるかも|おつかれさま。{t}休憩しよう|あと10秒だよ|はい、次のセットいこう|この種目おわり。いい感じだったよ',
+  '準備いいか？スタート|半分だ、いい調子|あと2回、がんばれ|ラスト一回、ていねいにな|ナイス。おつかれ|おつかれ。次はもう少しいけるさ|おつかれ。{t}休憩だ|あと10秒だ|よし、次のセットいこう|この種目は終わり。いい感じだったぞ'],
+ STD3,
+ ['集中。スタート|半分。フォーム崩さない|あと2回。ここから|ラスト一回。出し切って|よし。それでいい|目標まで届いてない。次は取りにいこう|休憩{t}。ちゃんと呼吸を整えて|あと10秒。構えて|時間。次|完了。次の種目も同じ集中で',
+  '集中しろ。スタート|半分。フォームを崩すな|あと2回。ここからだ|ラスト一回。出し切れ|よし。それでいい|目標に届いてない。次は取りにいけ|休憩{t}。呼吸を整えろ|あと10秒。構えろ|時間だ。次|完了。次の種目も同じ集中でいけ'],
+ ['ほら、始めるよ。スタート|まだ半分。もう顔がきついけど？|あと2回。ここで止めたら笑うよ|ラスト一回。根性見せなさい|ふーん、やればできるじゃない|え、もう終わり？その程度？|休憩は{t}だけ。甘えないで|あと10秒。休みすぎ|はい、休憩終わり。立って|許してあげる。次',
+  'ほら、始めるぞ。スタート|まだ半分だ。もうきついのか？|あと2回。ここで止めたら笑うぞ|ラスト一回。根性見せろ|ふん、やればできるじゃないか|もう終わりか？その程度か|休憩は{t}だけだ。甘えるな|あと10秒。休みすぎだ|休憩終わりだ。立て|許してやる。次だ'])};
+const PRE={f:[[1.12,.92],[1.08,.98],[1,1],[.96,1.05],[.92,1.08]],m:[[.96,.90],[.98,.96],[.95,1],[.90,1.05],[.86,1.08]]};
+const FRX=/kyoko|o-ren|haruka|nanami|ayumi|sayaka|mizuki|female|女性|(?:^|[-_\s.])ja[bd](?:[-_\s.]|$)/i,MRX=/otoya|ichiro|keita|daichi|hattori|takumi|male|男性|(?:^|[-_\s.])jac(?:[-_\s.]|$)/i;
+const HQRX=/enhanced|premium|拡張|プレミアム|network|neural|siri/i;
+const vStr=v=>((v&&v.name)||'')+' '+((v&&v.voiceURI)||'');
+function vGen(v){if(!v)return 'o';const s=vStr(v),f=FRX.test(s),m=MRX.test(s.replace(/female/ig,''));return f&&!m?'f':m&&!f?'m':'o'}
+const vQ=v=>{const s=vStr(v);return /premium|プレミアム/i.test(s)?3:/enhanced|拡張|neural/i.test(s)?2:/network|siri/i.test(s)?1:/-local\b/i.test(s)?-1:0};
+const vKey=v=>(v&&(v.voiceURI||v.name))||'';
+const bestOf=a=>a.slice().sort((x,y)=>vQ(y)-vQ(x))[0]||null;
+function jaList(){try{return (speechSynthesis.getVoices()||[]).filter(v=>/^ja/i.test(v.lang||''))}catch(e){return []}}
+let VO=null;
+function pickVoice(){const vs=jaList(),by=k=>vs.filter(v=>vGen(v)===k);VO=bestOf(by(S.vg))||bestOf(by('o'))||bestOf(vs)}
+function fillVoices(){const sel=$('s-voice'),cur=sel.value||S.vname,vs=jaList(),grp={f:[],m:[],o:[]};vs.forEach(v=>grp[vGen(v)].push(v));
+ sel.innerHTML='';const add=(p,val,txt)=>{const o=document.createElement('option');o.value=val;o.textContent=txt;p.appendChild(o)};
+ add(sel,'','おまかせ（'+(S.vg==='m'?'男性':'女性')+'）');
+ [['f','女性の声'],['m','男性の声'],['o','その他の日本語の声']].forEach(([k,lab])=>{if(!grp[k].length)return;const og=document.createElement('optgroup');og.label=lab;
+  grp[k].sort((x,y)=>vQ(y)-vQ(x)).forEach(v=>add(og,vKey(v),v.name+(HQRX.test(vStr(v))?'【高音質】':'')));sel.appendChild(og)});
+ const hit=cur&&vs.find(v=>vKey(v)===cur||v.name===cur);sel.value=hit?vKey(hit):''}
+try{pickVoice();fillVoices();speechSynthesis.addEventListener('voiceschanged',()=>{pickVoice();fillVoices()})}catch(e){}
+function jaVoice(){const k=S.vname,c=k&&jaList().find(v=>vKey(v)===k||v.name===k);return c||VO||null}
+let ac=null;
+function ensureAudio(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}}
+function beep(f,d){try{if(!ac||S.snd!=='on')return;const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function spk(s){const m=Math.floor(s/60),x=s%60;return (m?m+'分':'')+(x?x+'秒':'')}
+function L(k,t){const x=LINES.std[S.vg][S.lvl][k];return t==null?x:x.replace('{t}',spk(t))}
+function say(t,cut){if(S.snd!=='on')return;try{const s=(Array.isArray(t)?t:[t]).filter(Boolean).join('、');if(cut)speechSynthesis.cancel();if(!s)return;
+ const u=new SpeechSynthesisUtterance(s),v=jaVoice();u.lang='ja-JP';if(v)u.voice=v;const p=PRE[S.vg][S.lvl];let pitch=p[0];
+ if(S.vg==='m'&&vGen(v)!=='m')pitch*=.85;else if(S.vg==='f'&&vGen(v)==='m')pitch*=1.15;
+ const c=x=>Math.min(2,Math.max(.5,x));u.pitch=c(pitch);u.rate=c(p[1]);speechSynthesis.speak(u)}catch(e){}}
+function prime(){ensureAudio();try{const u=new SpeechSynthesisUtterance('');u.volume=0;speechSynthesis.speak(u)}catch(e){}}
+function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+$('s-try').addEventListener('click',()=>{fromForm();prime();say(L('start'),true);say(['8',L('two')]);say(['9',L('last')]);say(L('done'))});
+/* ---------- 画面の点灯を保つ ---------- */
+let wl=null;
+function wake(){try{if(navigator.wakeLock&&!wl)navigator.wakeLock.request('screen').then(l=>{wl=l;l.addEventListener('release',()=>{wl=null})}).catch(()=>{})}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&started)wake()});
+/* ---------- セッション ---------- */
+let started=false,phase='idle',setIdx=0,reps=0,shal=0,done=[],rep=null,ema=null,calBase=0,cdT=0,tempoT=0,tempoI=0,goalT=0;
+const vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
+function render(){const e=exr();$('exn').textContent=e.name+(S.mode==='tempo'?'（テンポ）':'');$('setn').textContent='セット '+Math.min(setIdx+1,S.sets)+'/'+S.sets+'　目標 '+S.goal+'回';
+ $('reps').textContent=reps;$('goal').textContent='/ '+S.goal;$('shn').textContent=shal;$('side').hidden=S.mode==='tempo'||e.kind==='osc';
+ $('note').textContent=S.mode==='tempo'?'3秒ごとに1回数えます':(e.note||'');
+ const b=$('bgo');b.textContent=phase==='run'||phase==='cd'?'一時停止':phase==='pause'?'再開':'スタート';b.classList.toggle('run',phase==='run'||phase==='cd');
+ $('depth').hidden=$('ang').hidden=false;if(S.mode==='tempo')$('ang').textContent=''}
+function newSession(){rep=null;setIdx=0;reps=0;shal=0;done=[];phase='idle';clearTimeout(goalT);stopTempo();render()}
+function chip(t,c){const el=$('chip');if(el.textContent!==t)el.textContent=t;el.className='chip'+(c?' '+c:'')}
+function flash(t){const f=$('flash');f.textContent=t;f.classList.add('on');clearTimeout(flash.t);flash.t=setTimeout(()=>f.classList.remove('on'),900)}
+function countdown(){clearInterval(cdT);stopTempo();phase='cd';render();let n=3;const cd=$('cd');cd.hidden=false;cd.textContent=n;beep(660,.1);say(String(n),true);
+ cdT=setInterval(()=>{n--;if(n>0){cd.textContent=n;beep(660,.1);say(String(n),true);return}clearInterval(cdT);cd.hidden=true;arm();say(L('start'),true);beep(990,.18)},1000)}
+function arm(){phase='run';rep=new Rep(exr(),{offset:S.depth});ema=null;calBase=0;wake();if(S.mode==='tempo')startTempo();render()}
+function pause(){clearInterval(cdT);$('cd').hidden=true;stopTempo();phase='pause';try{speechSynthesis.cancel()}catch(e){}render()}
+function startTempo(){stopTempo();$('dsh').hidden=true;$('ang').textContent='';tempoT=performance.now();tempoI=setInterval(()=>{const p=(performance.now()-tempoT)/3000;$('dfill').style.height=Math.min(100,p*100)+'%';if(p>=1){tempoT+=3000;onRep(false)}},50)}
+function stopTempo(){clearInterval(tempoI);tempoI=0}
+function onRep(manual){if(phase!=='run'&&!manual)return;reps++;render();beep(880,.08);vib(30);
+ const g=S.goal,t=[String(reps)];if(reps===g-2&&g>2)t.push(L('two'));else if(reps===g-1)t.push(L('last'));else if(g>=6&&reps===Math.floor(g/2))t.push(L('half'));
+ if(reps>=g){stopTempo();phase='goal';render();say([String(reps),L('done')],true);vib(200);clearTimeout(goalT);goalT=setTimeout(endSet,1600)}else say(t,true)}
+function onShallow(){shal++;render();flash('もう少し深く');beep(330,.15);const c=exr().cue;if(c[0])say(S.lvl>=3?c[1]:c[0],true)}
+function endSet(){clearTimeout(goalT);clearInterval(cdT);$('cd').hidden=true;stopTempo();
+ if(phase!=='goal')say(reps>=S.goal?L('done'):L('early'),true);
+ done.push({r:reps,s:shal});reps=0;shal=0;setIdx++;phase='rest';render();
+ if(setIdx>=S.sets){showSum();return}
+ setTimeout(()=>startRest(exr().restSec),phase==='rest'?700:0)}
+$('bgo').addEventListener('click',()=>{prime();if(phase==='run'||phase==='cd')pause();else if(phase==='idle'||phase==='pause')countdown()});
+$('bp').addEventListener('click',()=>{prime();if(phase==='goal'||phase==='rest')return;onRep(true)});
+$('bm').addEventListener('click',()=>{if(reps>0){reps--;render()}});
+$('bend').addEventListener('click',()=>{prime();if(phase==='rest')return;if(phase==='goal'){endSet();return}if(reps===0&&!confirm('0回のままセットを終了しますか？'))return;endSet()});
+/* ---------- 休憩タイマー ---------- */
+let tEnd=0,tTot=0,tInt=0,lastV=-1;
+const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+function startRest(sec){$('tm-name').textContent=exr().name;$('tm-set').textContent=setIdx+'/'+S.sets+'セット目のあと';
+ tTot=sec;tEnd=Date.now()+sec*1000;lastV=-1;$('rest').hidden=false;beep(660,.12);say(L('restStart',sec));vib(80);clearInterval(tInt);tick();tInt=setInterval(tick,100)}
+function tick(){const ms=tEnd-Date.now(),left=Math.max(0,Math.ceil(ms/1000)),pr=tTot?Math.min(1,Math.max(0,1-ms/(tTot*1000))):1;
+ const f=$('tm-fill');f.style.height=(pr*100)+'%';f.style.background='hsl('+Math.round(220-75*pr)+' '+Math.round(60+5*pr)+'% '+Math.round(38+4*pr)+'%)';
+ if(left>0){$('tm-t').textContent=fmt(left);$('tm-sub').textContent=left<=10?'もうすぐ次のセット':'休憩中';
+  if(left!==lastV&&(left===10||left<=3)){lastV=left;vib(left===10?150:70);if(left===10)say(L('rest10'));else beep(660,.1)}return}
+ clearInterval(tInt);$('tm-t').textContent='次のセットへ';$('tm-sub').textContent='';vib([400,150,400]);beep(880,.3);say(L('restEnd'));setTimeout(closeRest,1300)}
+function closeRest(){if($('rest').hidden)return;clearInterval(tInt);$('rest').hidden=true;phase='idle';render();countdown()}
+$('tm-m').addEventListener('click',()=>{tEnd-=15000;tick()});
+$('tm-p').addEventListener('click',()=>{tEnd+=15000;tTot+=15;tick()});
+$('tm-x').addEventListener('click',()=>{prime();closeRest()});
+/* ---------- まとめ ---------- */
+function recText(){const d=new Date();return (d.getMonth()+1)+'/'+d.getDate()+' '+exr().name+' '+done.map(x=>x.r).join(',')}
+function showSum(){say(L('allDone'));phase='sum';const tb=$('sum-b');tb.innerHTML='';
+ done.forEach((x,i)=>{const tr=document.createElement('tr');[i+1,x.r,x.s].forEach((v,j)=>{const td=document.createElement('td');td.textContent=v;if(j===2)td.className='sh';tr.appendChild(td)});tb.appendChild(tr)});
+ $('sum-h').textContent=exr().name+'　目標 '+S.goal+'回 × '+S.sets+'セット'+(S.mode==='tempo'?'（テンポで計測）':'');$('rec').textContent=recText();$('copied').textContent='';$('sum').hidden=false}
+$('copy').addEventListener('click',async()=>{const t=recText();let ok=false;try{await navigator.clipboard.writeText(t);ok=true}catch(e){}
+ if(!ok){try{const a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();ok=document.execCommand('copy');a.remove()}catch(e){}}
+ $('copied').textContent=ok?'コピーしました：'+t:'コピーできませんでした。上の文字を長押ししてコピーしてください。'});
+$('again').addEventListener('click',()=>{$('sum').hidden=true;newSession()});
+$('tocfg').addEventListener('click',()=>{$('sum').hidden=true;newSession();openSetup()});
+/* ---------- 設定シート ---------- */
+function openSetup(){if(phase==='run'||phase==='cd')pause();toForm();fillVoices();$('sgo').textContent=started?'設定を閉じて続ける':'この設定ではじめる';$('setup').hidden=false}
+$('cfg').addEventListener('click',openSetup);
+$('sgo').addEventListener('click',()=>{const old=Object.assign({},S);fromForm();prime();$('setup').hidden=true;pickVoice();
+ const first=!started;started=true;
+ if(first||old.ex!==S.ex||old.sets!==S.sets||old.mode!==S.mode)newSession();else render();
+ if(rep)rep.setOffset(S.depth);
+ if(S.mode==='cam'){if(first||old.cam!==S.cam||old.mode!=='cam'||!stream)startCam()}else{stopCam();hideMsg();chip('テンポで数えます','ok');clearCanvas();$('depth').classList.remove('hit')}
+ wake()});
+/* ---------- カメラとAIモデル ---------- */
+let stream=null,lmk=null,loading=false,lastInf=0,loopOn=false;
+function showMsg(h,p,steps,btns){const m=$('msg');m.innerHTML='';const H=document.createElement('h2');H.textContent=h;m.appendChild(H);
+ if(p){const P=document.createElement('p');P.textContent=p;m.appendChild(P)}
+ if(steps&&steps.length){const o=document.createElement('ol');steps.forEach(s=>{const li=document.createElement('li');li.textContent=s;o.appendChild(li)});m.appendChild(o)}
+ if(btns&&btns.length){const r=document.createElement('div');r.className='row';btns.forEach(([t,f,pr])=>{const b=document.createElement('button');b.type='button';b.className='btn'+(pr?' p':'');b.textContent=t;b.addEventListener('click',f);r.appendChild(b)});m.appendChild(r)}
+ m.hidden=false}
+function hideMsg(){$('msg').hidden=true}
+function toTempo(){S.mode='tempo';save();stopCam();hideMsg();newSession();chip('テンポで数えます','ok')}
+const TEMPO_B=['テンポ（3秒）で数える',toTempo,1];
+function camErr(kind){chip(kind==='model'?'AIモデル未読み込み':'カメラ停止中','warn');
+ if(kind==='https')showMsg('このページではカメラを使えません','カメラは https:// で始まるページでのみ使えます。',['GitHub Pages など https のURLで開き直してください','LINEなどのアプリ内ブラウザなら、Safari／Chromeで開いてください'],[TEMPO_B]);
+ else if(kind==='denied')showMsg('カメラの使用が許可されていません','許可すると、映像は端末の中だけで処理されます。',['iPhone：アドレスバーの「ぁあ」→ Webサイトの設定 → カメラ →「許可」（または 設定アプリ → Safari → カメラ）','Android：アドレスバー左のアイコン → 権限 → カメラを許可','許可したら「もう一度試す」'],[['もう一度試す',startCam,1],TEMPO_B]);
+ else if(kind==='nocam')showMsg('カメラが見つかりません','ほかのアプリがカメラを使っていないか確認してください。',null,[['もう一度試す',startCam,1],TEMPO_B]);
+ else showMsg('AIモデルを読み込めませんでした','通信状態を確認して「もう一度試す」を押してください。うまくいかない場合は、テンポ（3秒ごと）で数えられます。',null,[['もう一度試す',()=>{hideMsg();loadModel()},1],TEMPO_B])}
+async function startCam(){stopCam();hideMsg();clearCanvas();
+ if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){camErr('https');return}
+ chip('カメラを起動中…');
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:S.cam,width:{ideal:1280},height:{ideal:720}}})}
+ catch(e){if(e&&(e.name==='NotAllowedError'||e.name==='SecurityError')){camErr('denied');return}
+  try{stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false})}catch(e2){camErr(e2&&e2.name==='NotAllowedError'?'denied':'nocam');return}}
+ vid.srcObject=stream;const mir=S.cam==='user';vid.classList.toggle('mir',mir);cv.classList.toggle('mir',mir);
+ try{await vid.play()}catch(e){}
+ sizeCanvas();if(!lmk)loadModel();else{chip('準備OK','ok')}startLoop()}
+function stopCam(){loopOn=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}vid.srcObject=null}
+function sizeCanvas(){const w=vid.videoWidth||640,h=vid.videoHeight||480;if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}}
+vid.addEventListener('resize',sizeCanvas);vid.addEventListener('loadedmetadata',sizeCanvas);
+addEventListener('resize',sizeCanvas);addEventListener('orientationchange',()=>setTimeout(sizeCanvas,300));
+function clearCanvas(){ctx.clearRect(0,0,cv.width,cv.height)}
+async function loadModel(){if(loading||lmk)return;loading=true;
+ const prog=t=>showMsg('AIモデルを準備中…',t+'（初回のみ数MBをダウンロードします。映像は送信しません）');
+ try{prog('1/3 ライブラリを読み込み中');
+  const {PoseLandmarker,FilesetResolver}=await import(MP);
+  prog('2/3 実行環境を読み込み中');
+  const fs=await FilesetResolver.forVisionTasks(MP+'/wasm');
+  prog('3/3 モデルをダウンロード中');
+  const r=await fetch(MODEL);if(!r.ok)throw new Error('HTTP '+r.status);
+  const total=+r.headers.get('content-length')||0;let buf;
+  if(r.body&&r.body.getReader){const rd=r.body.getReader(),parts=[];let got=0;for(;;){const {done:d,value}=await rd.read();if(d)break;parts.push(value);got+=value.length;prog('3/3 モデルをダウンロード中 '+(total?Math.round(got/total*100)+'%':(got/1048576).toFixed(1)+'MB'))}
+   buf=new Uint8Array(got);let o=0;for(const p of parts){buf.set(p,o);o+=p.length}}else buf=new Uint8Array(await r.arrayBuffer());
+  const mk=d=>PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetBuffer:buf,delegate:d},runningMode:'VIDEO',numPoses:1});
+  try{lmk=await mk('GPU')}catch(e){lmk=await mk('CPU')}
+  hideMsg();chip('体を映してください')}
+ catch(e){console.warn('model',e);lmk=null;if(S.mode==='cam')camErr('model')}
+ finally{loading=false}}
+function startLoop(){if(loopOn)return;loopOn=true;const step=()=>{if(!loopOn)return;frame();vid.requestVideoFrameCallback?vid.requestVideoFrameCallback(step):requestAnimationFrame(step)};step()}
+function frame(){const now=performance.now();if(!lmk||vid.readyState<2||now-lastInf<48)return;lastInf=now;sizeCanvas();
+ let res=null;try{res=lmk.detectForVideo(vid,now)}catch(e){return}
+ onPose(res&&res.landmarks&&res.landmarks[0],now)}
+const EDGES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,29],[29,31],[27,31],[28,30],[30,32],[28,32]];
+function onPose(lm,now){const e=exr(),W=cv.width,H=cv.height;clearCanvas();
+ if(!lm){chip('体が見えていません','warn');ema=null;bar(null);return}
+ const m=measure(lm,e,W,H),act=new Set(m.ids||[]);
+ draw(lm,act,m,W,H);
+ if(m.why){chip(m.why==='above'?'体が見えていません（手首が肩より上に）':'体が見えていません','warn');ema=null;bar(null);return}
+ const edge=[...act].some(i=>{const p=lm[i];return p.x<.03||p.x>.97||p.y<.03||p.y>.97});
+ chip(edge?'もう少し離れて':'準備OK',edge?'warn':'ok');
+ let v=m.v;if(e.calf){calBase=Math.min(calBase+.02,v);v-=calBase}
+ ema=ema==null?v:ema+.3*(v-ema);bar(ema);
+ if(phase==='run'&&rep&&S.mode==='cam'){const ev=rep.push(ema,now);if(ev){if(ev.type==='rep')onRep(false);else if(ev.type==='shallow')onShallow()}}}
+function bar(v){if(S.mode==='tempo')return;const r=rep||new Rep(exr(),{offset:S.depth});if(!rep)rep=r;
+ const p=v==null?0:r.progress(v),sp=r.shPos();$('dfill').style.height=Math.max(0,Math.min(1,p))*100+'%';$('depth').classList.toggle('hit',p>=1);
+ const ds=$('dsh');ds.hidden=sp==null;if(sp!=null)ds.style.bottom=sp*100+'%';
+ $('ang').textContent=v==null?'':Math.round(v)+(exr().unit||'°')}
+function draw(lm,act,m,W,H){const P=i=>[lm[i].x*W,lm[i].y*H],s=Math.max(2,W/320);ctx.lineCap='round';
+ const ids=m.ids||[],hot=new Set();for(let i=0;i+1<ids.length;i++)hot.add(ids[i]+'-'+ids[i+1]).add(ids[i+1]+'-'+ids[i]);
+ const z=lm.every(q=>!q.visibility),ok=i=>z||lm[i].visibility>=.5;
+ for(const [a,b] of EDGES){if(!ok(a)||!ok(b))continue;const h=hot.has(a+'-'+b);ctx.strokeStyle=h?'#8d6ff0':'rgba(255,255,255,.45)';ctx.lineWidth=h?s*3:s*1.4;const [x1,y1]=P(a),[x2,y2]=P(b);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+ for(const i of act){const [x,y]=P(i);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,s*3,0,7);ctx.fill()}
+ if(m.v!=null&&ids.length===3){const [x,y]=P(ids[1]),mir=S.cam==='user';ctx.save();ctx.translate(x,y);if(mir)ctx.scale(-1,1);ctx.font='600 '+Math.round(s*11)+'px "IBM Plex Mono",monospace';ctx.fillStyle='#fff';ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=s*2;const t=Math.round(m.v)+'°';ctx.strokeText(t,s*8,-s*6);ctx.fillText(t,s*8,-s*6);ctx.restore()}}
+/* ---------- 起動 ---------- */
+toForm();render();
+if(S.mode==='tempo')chip('テンポで数えます','ok');
+window.__app={feed:(lm,t)=>onPose(lm,t??performance.now()),get state(){return {phase,setIdx,reps,shal,done:done.slice(),mode:S.mode}},S};
+</script>
+</body>
+</html>
