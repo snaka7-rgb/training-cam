@@ -114,6 +114,10 @@ th{font-size:12.5px;color:var(--mut);font-weight:700}
 td{font:600 17px var(--f-n)}
 td.sh{color:var(--warn)}
 #rec{font:600 15px var(--f-n);background:var(--sf2);border-radius:10px;padding:10px 12px;margin:12px 0 8px;word-break:break-all}
+#lensinfo{display:block;font-size:11.5px;color:#cfc8e6;margin-top:2px}
+#zoomrow{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:44px;bottom:10px;display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:#000a;color:#fff;font-size:12px}
+#zoomrow input{flex:1;min-width:0;accent-color:var(--acc2)}
+#zoomv{font:600 12px var(--f-n);min-width:38px;text-align:right}
 </style>
 </head>
 <body>
@@ -122,11 +126,12 @@ td.sh{color:var(--warn)}
   <video id="vid" playsinline muted autoplay></video>
   <canvas id="cv"></canvas>
   <div id="hud">
-   <div class="t"><div id="exn"></div><div id="setn"></div><span class="chip" id="chip">準備中</span><span id="note"></span></div>
+   <div class="t"><div id="exn"></div><div id="setn"></div><span class="chip" id="chip">準備中</span><span id="note"></span><span id="lensinfo"></span></div>
    <button type="button" id="cfg">設定</button>
   </div>
   <div id="depth" aria-hidden="true"><div id="dfill"></div><div id="dsh" hidden></div></div>
   <div id="ang"></div>
+  <div id="zoomrow" hidden><span>広く</span><input type="range" id="zoom" aria-label="ズーム"><span>寄る</span><b id="zoomv"></b></div>
   <div id="flash">もう少し深く</div>
   <div id="cd" hidden></div>
   <div class="msg" id="msg" hidden></div>
@@ -158,6 +163,8 @@ td.sh{color:var(--warn)}
    <div class="f"><div class="seg" role="radiogroup" aria-label="カウント方法"><label><input type="radio" name="mode" value="cam" checked><span>カメラ</span></label><label><input type="radio" name="mode" value="tempo"><span>テンポ（3秒）</span></label></div></div>
    <p class="small">テンポ：カメラで見えない種目用。3秒ごとに1回数えます。</p>
    <div class="f"><span class="l">カメラ</span><div class="seg" role="radiogroup" aria-label="カメラ"><label><input type="radio" name="cam" value="user" checked><span>前面</span></label><label><input type="radio" name="cam" value="environment"><span>背面</span></label></div></div>
+   <div class="f"><label for="s-lens">レンズ</label><select id="s-lens"><option value="wide">広角（いちばん広く）</option><option value="std">標準</option></select></div>
+   <p class="small" id="s-lens-note">広角にすると、近くからでも全身が映りやすくなります。カメラを一度起動すると、このスマホのレンズが一覧に出ます。</p>
    <div class="f"><label for="s-depth">深さ調整</label><div class="rng"><input id="s-depth" type="range" min="-15" max="15" step="1" value="0"><div class="ends"><span>浅めでOK</span><span class="vv" id="s-depth-v">±0°</span><span>深く求める</span></div></div></div>
   </div>
   <div class="card">
@@ -294,7 +301,7 @@ const MP='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 const SKEY='camera-count-v1';
 /* ---------- 設定 ---------- */
-const DEF={ex:'バックスクワット',goal:10,sets:3,vg:'f',lvl:2,vname:'',snd:'on',cam:'user',depth:0,mode:'cam'};
+const DEF={ex:'バックスクワット',goal:10,sets:3,vg:'f',lvl:2,vname:'',snd:'on',cam:'user',depth:0,mode:'cam',lens:'wide',zoom:0};
 let S=Object.assign({},DEF);
 try{const o=JSON.parse(localStorage.getItem(SKEY)||'{}');if(o&&typeof o==='object')Object.keys(DEF).forEach(k=>{if(o[k]!=null&&typeof o[k]===typeof DEF[k])S[k]=o[k]})}catch(e){}
 if(!EXR.some(e=>e.name===S.ex))S.ex=DEF.ex;
@@ -307,8 +314,8 @@ const exSel=$('s-ex');
 {let grp='',h='';const G={knee:'脚',hinge:'お尻・裏もも',thrust:'お尻・裏もも',press:'押す（胸・肩・腕）',pushup:'押す（胸・肩・腕）',pullup:'引く（背中）',lat:'引く（背中）',row:'引く（背中）',curl:'腕',ext:'腕',legext:'脚',raise:'肩',calf:'ふくらはぎ',legraise:'体幹',osc:'その他'};
  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
  EXR.forEach(e=>{const g=G[e.kind];if(g!==grp){h+=(grp?'</optgroup>':'')+'<optgroup label="'+g+'">';grp=g}h+='<option value="'+esc(e.name)+'">'+esc(e.name)+'</option>'});exSel.innerHTML=h+'</optgroup>'}
-function toForm(){exSel.value=S.ex;$('s-goal').value=S.goal;$('s-sets').value=S.sets;radio('vg',S.vg);$('s-lvl').value=S.lvl;radio('snd',S.snd);radio('cam',S.cam);$('s-depth').value=S.depth;radio('mode',S.mode);labels()}
-function fromForm(){S.ex=exSel.value;S.goal=clampN($('s-goal').value,1,100,10);S.sets=clampN($('s-sets').value,1,10,3);S.vg=rv('vg')||'f';S.lvl=clampN($('s-lvl').value,0,4,2);S.vname=$('s-voice').value;S.snd=rv('snd')||'on';S.cam=rv('cam')||'user';S.depth=clampN($('s-depth').value,-15,15,0);S.mode=rv('mode')||'cam';save()}
+function toForm(){exSel.value=S.ex;$('s-goal').value=S.goal;$('s-sets').value=S.sets;radio('vg',S.vg);$('s-lvl').value=S.lvl;radio('snd',S.snd);radio('cam',S.cam);fillLens();$('s-depth').value=S.depth;radio('mode',S.mode);labels()}
+function fromForm(){S.ex=exSel.value;S.goal=clampN($('s-goal').value,1,100,10);S.sets=clampN($('s-sets').value,1,10,3);S.vg=rv('vg')||'f';S.lvl=clampN($('s-lvl').value,0,4,2);S.vname=$('s-voice').value;S.snd=rv('snd')||'on';S.cam=rv('cam')||'user';S.lens=$('s-lens').value||'wide';S.depth=clampN($('s-depth').value,-15,15,0);S.mode=rv('mode')||'cam';save()}
 function exr(){return EXR.find(e=>e.name===S.ex)||EXR[0]}
 function labels(){const d=+$('s-depth').value;$('s-depth-v').textContent=(d>0?'+':d<0?'−':'±')+Math.abs(d)+'°';$('s-lvl-v').textContent=SL[clampN($('s-lvl').value,0,4,2)];
  const e=EXR.find(x=>x.name===exSel.value)||EXR[0],g=$('s-guide');g.textContent='置き方：'+e.guide;
@@ -431,7 +438,7 @@ $('sgo').addEventListener('click',()=>{const old=Object.assign({},S);fromForm();
  const first=!started;started=true;
  if(first||old.ex!==S.ex||old.sets!==S.sets||old.mode!==S.mode)newSession();else render();
  if(rep)rep.setOffset(S.depth);
- if(S.mode==='cam'){if(first||old.cam!==S.cam||old.mode!=='cam'||!stream)startCam()}else{stopCam();hideMsg();chip('テンポで数えます','ok');clearCanvas();$('depth').classList.remove('hit')}
+ if(S.mode==='cam'){if(first||old.cam!==S.cam||old.lens!==S.lens||old.mode!=='cam'||!stream)startCam()}else{stopCam();hideMsg();chip('テンポで数えます','ok');clearCanvas();$('depth').classList.remove('hit')}
  wake()});
 /* ---------- カメラとAIモデル ---------- */
 let stream=null,lmk=null,loading=false,lastInf=0,loopOn=false;
@@ -448,16 +455,55 @@ function camErr(kind){chip(kind==='model'?'AIモデル未読み込み':'カメ�
  else if(kind==='denied')showMsg('カメラの使用が許可されていません','許可すると、映像は端末の中だけで処理されます。',['iPhone：アドレスバーの「ぁあ」→ Webサイトの設定 → カメラ →「許可」（または 設定アプリ → Safari → カメラ）','Android：アドレスバー左のアイコン → 権限 → カメラを許可','許可したら「もう一度試す」'],[['もう一度試す',startCam,1],TEMPO_B]);
  else if(kind==='nocam')showMsg('カメラが見つかりません','ほかのアプリがカメラを使っていないか確認してください。',null,[['もう一度試す',startCam,1],TEMPO_B]);
  else showMsg('AIモデルを読み込めませんでした','通信状態を確認して「もう一度試す」を押してください。うまくいかない場合は、テンポ（3秒ごと）で数えられます。',null,[['もう一度試す',()=>{hideMsg();loadModel()},1],TEMPO_B])}
+/* ---------- レンズ（広角）とズーム ---------- */
+let camDevs=[],lensRetry=false,track=null;
+const UW=/ultra ?wide|超広角|0\.5x/i,FRONTRX=/front|前面|user|facing front|selfie|インカメ/i;
+const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+async function listCams(){try{const ds=await navigator.mediaDevices.enumerateDevices();camDevs=ds.filter(d=>d.kind==='videoinput'&&d.label)}catch(e){camDevs=[]}fillLens()}
+function devsFor(face){return camDevs.filter(d=>face==='user'?FRONTRX.test(d.label):!FRONTRX.test(d.label))}
+function uwFor(face){return devsFor(face).find(d=>UW.test(d.label))}
+function fillLens(){const sel=$('s-lens');if(!sel)return;const face=rv('cam')||S.cam,list=devsFor(face);
+ let h='<option value="wide">広角（いちばん広く）</option><option value="std">標準</option>';
+ list.forEach((d,i)=>{h+='<option value="id:'+escH(d.deviceId)+'">'+escH(d.label||('カメラ'+(i+1)))+(UW.test(d.label)?'【超広角】':'')+'</option>'});
+ sel.innerHTML=h;sel.value=[...sel.options].some(o=>o.value===S.lens)?S.lens:'wide';
+ const n=$('s-lens-note');
+ if(!camDevs.length)n.textContent='広角にすると、近くからでも全身が映りやすくなります。カメラを一度起動すると、このスマホのレンズが一覧に出ます。';
+ else if(face==='user')n.textContent='前面カメラは広角レンズがないスマホがほとんどです。広く映したいときは背面カメラ＋広角がおすすめです。';
+ else if(uwFor(face))n.textContent='超広角レンズが見つかりました。「広角」を選ぶと自動で使います。';
+ else n.textContent='超広角レンズの名前が見つかりませんでした。「広角」ではズームをいちばん引いた状態にします（対応機種のみ）。一覧のカメラを順に試すと広角が見つかることもあります。'}
+$('s-lens').addEventListener('change',()=>{});
+document.querySelectorAll('input[name="cam"]').forEach(r=>r.addEventListener('change',fillLens));
+function videoConstraint(){const base={width:{ideal:1280},height:{ideal:720}};
+ if(S.lens&&S.lens.startsWith('id:'))return Object.assign(base,{deviceId:{exact:S.lens.slice(3)}});
+ if(S.lens==='wide'){const u=uwFor(S.cam);if(u)return Object.assign(base,{deviceId:{exact:u.deviceId}})}
+ return Object.assign(base,{facingMode:S.cam})}
+function lensInfo(t){$('lensinfo').textContent=t||''}
+async function setupZoom(){const row=$('zoomrow'),z=$('zoom');row.hidden=true;
+ track=stream&&stream.getVideoTracks()[0];if(!track)return;
+ const label=track.label||'',usedUW=UW.test(label);
+ let caps={};try{caps=track.getCapabilities?track.getCapabilities():{}}catch(e){}
+ const zc=caps.zoom;
+ if(zc&&isFinite(zc.min)&&isFinite(zc.max)&&zc.max>zc.min){
+  z.min=zc.min;z.max=Math.min(zc.max,Math.max(zc.min*4,2));z.step=zc.step||0.1;
+  let v=S.zoom&&S.zoom>=zc.min&&S.zoom<=zc.max?S.zoom:(S.lens==='wide'?zc.min:Math.max(zc.min,Math.min(1,zc.max)));
+  z.value=v;await applyZoom(v);row.hidden=false;
+  lensInfo(usedUW?'広角：超広角レンズ':(S.lens==='wide'&&zc.min<1?'広角：ズーム'+(+zc.min).toFixed(1)+'倍':(S.lens==='wide'?'このスマホはこれ以上広くできません':'')))}
+ else lensInfo(usedUW?'広角：超広角レンズ':(S.lens==='wide'?(S.cam==='user'?'前面カメラは広角にできません':'このスマホではページから広角を選べません'):''))}
+async function applyZoom(v){$('zoomv').textContent=(+v).toFixed(1)+'×';try{await track.applyConstraints({advanced:[{zoom:+v}]})}catch(e){}}
+$('zoom').addEventListener('input',e=>{const v=+e.target.value;S.zoom=v;save();applyZoom(v)});
 async function startCam(){stopCam();hideMsg();clearCanvas();
  if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){camErr('https');return}
  chip('カメラを起動中…');
- try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:S.cam,width:{ideal:1280},height:{ideal:720}}})}
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:videoConstraint()})}
  catch(e){if(e&&(e.name==='NotAllowedError'||e.name==='SecurityError')){camErr('denied');return}
   try{stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false})}catch(e2){camErr(e2&&e2.name==='NotAllowedError'?'denied':'nocam');return}}
+ await listCams();
+ if(S.lens==='wide'&&!lensRetry&&uwFor(S.cam)&&!UW.test((stream.getVideoTracks()[0]||{}).label||'')){lensRetry=true;return startCam()}
+ lensRetry=false;
  vid.srcObject=stream;const mir=S.cam==='user';vid.classList.toggle('mir',mir);cv.classList.toggle('mir',mir);
  try{await vid.play()}catch(e){}
- sizeCanvas();if(!lmk)loadModel();else{chip('準備OK','ok')}startLoop()}
-function stopCam(){loopOn=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}vid.srcObject=null}
+ sizeCanvas();await setupZoom();if(!lmk)loadModel();else{chip('準備OK','ok')}startLoop()}
+function stopCam(){loopOn=false;track=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}vid.srcObject=null}
 function sizeCanvas(){const w=vid.videoWidth||640,h=vid.videoHeight||480;if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}}
 vid.addEventListener('resize',sizeCanvas);vid.addEventListener('loadedmetadata',sizeCanvas);
 addEventListener('resize',sizeCanvas);addEventListener('orientationchange',()=>setTimeout(sizeCanvas,300));
