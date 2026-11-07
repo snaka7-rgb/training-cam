@@ -1,0 +1,1302 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1d4fbf"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>トレーニング計画メーカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* レイアウト: 広い画面は左に条件パネル（追従）、右に計画。狭い画面は条件→計画の縦積み。
+色: コンクリートの灰に競技用プレートの4色（青=通常週・赤=追い込み週・緑=回復週・黄=測定週） */
+:root{
+--bg:#e9ecf1; --surface:#ffffff; --surface-2:#f4f6f9; --ink:#161d27; --muted:#5a6575; --line:#d3d9e2;
+--accent:#1d4fbf; --accent-ink:#ffffff; --chip:#e1e7f0;
+--p-blue:#1d4fbf; --p-red:#6a4bd1; --p-green:#2a8346; --p-yellow:#d9a913; --p-yellow-ink:#2b2200;
+--warn-bg:#fff4dc; --warn-ink:#6b4a00;
+--f-display:"Dela Gothic One","Zen Kaku Gothic New","Hiragino Sans",sans-serif;
+--f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+--f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+--r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+--bg:#11151b; --surface:#1a2029; --surface-2:#212833; --ink:#e6eaf0; --muted:#9aa4b3; --line:#2d3542;
+--accent:#6b93ff; --accent-ink:#0b1020; --chip:#262f3c;
+--p-blue:#5d88f5; --p-red:#9a80f2; --p-green:#45ad68; --p-yellow:#e8bd34; --p-yellow-ink:#231a00;
+--warn-bg:#33290f; --warn-ink:#f2d58a; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+--bg:#11151b; --surface:#1a2029; --surface-2:#212833; --ink:#e6eaf0; --muted:#9aa4b3; --line:#2d3542;
+--accent:#6b93ff; --accent-ink:#0b1020; --chip:#262f3c;
+--p-blue:#5d88f5; --p-red:#9a80f2; --p-green:#45ad68; --p-yellow:#e8bd34; --p-yellow-ink:#231a00;
+--warn-bg:#33290f; --warn-ink:#f2d58a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.65}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+header.top h1{font-family:var(--f-display);font-weight:400;font-size:clamp(22px,4vw,30px);margin:0;letter-spacing:.02em;text-wrap:balance}
+header.top p{margin:0;color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:880px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;flex-direction:column;gap:16px}
+@media (max-width:880px){aside.panel{position:static}}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lbl{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.num{position:relative}
+.num input{width:100%;font:600 16px var(--f-num);padding:9px 34px 9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)}
+.num span{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none}
+select{width:100%;font:500 15px var(--f-body);padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)}
+input:focus-visible,select:focus-visible,.seg label:focus-within,.chips label:focus-within,.week:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg label,.chips label{position:relative;cursor:pointer}
+.seg input,.chips input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);font-size:14px;font-weight:500;user-select:none}
+.seg input:checked+span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.seg.dn span{font-family:var(--f-num);min-width:42px;text-align:center}
+.goal{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.goal span{padding:9px 10px;line-height:1.35}
+.goal small{display:block;font-size:11px;opacity:.8;font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{display:block;padding:6px 11px;border-radius:999px;background:var(--chip);font-size:13px;border:1px solid transparent;user-select:none}
+.chips input:checked+span{background:var(--surface);border-color:var(--accent);color:var(--accent);font-weight:700}
+.hint{font-size:12px;color:var(--muted);margin:0}
+
+main{display:flex;flex-direction:column;gap:18px;min-width:0}
+.plan-head{display:flex;flex-direction:column;gap:4px}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.plan-head h2{font-family:var(--f-display);font-weight:400;font-size:clamp(24px,4.4vw,36px);margin:0;line-height:1.25;text-wrap:balance}
+.plan-head p{margin:0;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .k{font-size:12px;color:var(--muted);font-weight:700}
+.stat .v{font:600 clamp(20px,3.4vw,26px)/1.2 var(--f-num);font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;font-weight:500;margin-left:2px}
+.stat .s{font-size:12px;color:var(--muted)}
+.notes{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.notes li{background:var(--warn-bg);color:var(--warn-ink);padding:9px 12px;border-radius:8px;font-size:13.5px}
+h3{font-family:var(--f-display);font-weight:400;font-size:19px;margin:0 0 10px;letter-spacing:.02em}
+.timeline{display:flex;flex-wrap:wrap;gap:4px}
+.week{border:0;cursor:pointer;min-width:34px;height:40px;flex:1 0 34px;max-width:48px;border-radius:6px;font:600 12px var(--f-num);color:#fff;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;position:relative;opacity:.9}
+.week.load{background:var(--p-blue)}
+.week.peak{background:var(--p-red)}
+.week.deload{background:var(--p-green)}
+.week.test{background:var(--p-yellow);color:var(--p-yellow-ink)}
+.week.sel{opacity:1;box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.wk-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:16px 0 12px}
+.wk-head b{font-family:var(--f-display);font-weight:400;font-size:20px}
+.pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff}
+.pill.load{background:var(--p-blue)}.pill.peak{background:var(--p-red)}.pill.deload{background:var(--p-green)}.pill.test{background:var(--p-yellow);color:var(--p-yellow-ink)}
+.wk-head .meta{font-size:13px;color:var(--muted)}
+.days{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+@media (max-width:420px){.days{grid-template-columns:minmax(0,1fr)}}
+.day{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);min-width:0}
+.day-h{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.dow{font-family:var(--f-display);font-size:18px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--surface);flex:none}
+.day-h div{min-width:0}
+.day-h b{display:block;font-size:15px}
+.day-h small{color:var(--muted);font-size:12px}
+.ex{width:100%;border-collapse:collapse;font-size:13.5px}
+.ex td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.ex tr:last-child td{border-bottom:0}
+.ex .g{font-size:11px;color:var(--muted);display:block;letter-spacing:.04em}
+.ex .sr{font:600 13px var(--f-num);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.ex .rest{display:block;font:500 11px var(--f-body);color:var(--muted)}
+.ex tr.focus td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.cardio{padding:10px 12px;font-size:13px;background:var(--surface-2);border-top:1px solid var(--line)}
+.vol{display:flex;flex-direction:column;gap:7px}
+.vrow{display:grid;grid-template-columns:96px minmax(0,1fr) 54px;gap:10px;align-items:center;font-size:13px}
+.bar{height:12px;background:var(--chip);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--muted);border-radius:3px}
+.vrow.f .bar i{background:var(--accent)}
+.vrow.f .nm{font-weight:700}
+.vrow .n{font:600 13px var(--f-num);text-align:right;font-variant-numeric:tabular-nums}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:720px){.two{grid-template-columns:minmax(0,1fr)}}
+.macro{display:flex;height:22px;border-radius:5px;overflow:hidden;margin:6px 0 10px}
+.macro i{display:block;height:100%}
+.mlist{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;font-size:13.5px}
+.mlist .n{font:600 13px var(--f-num);text-align:right;font-variant-numeric:tabular-nums}
+.dot{width:10px;height:10px;border-radius:2px;align-self:center}
+ol.rules{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px;font-size:14px;max-width:65ch}
+.foot{font-size:12px;color:var(--muted);max-width:70ch}
+@media (prefers-reduced-motion:no-preference){.week{transition:transform .12s}.week:hover{transform:translateY(-2px)}}
+.food{display:flex;flex-direction:column;gap:14px}
+.food h3{margin:0}
+.ftags{display:flex;flex-wrap:wrap;gap:8px}
+.ftag{font-family:var(--f-display);font-size:17px;padding:5px 14px;border-radius:8px}
+.ftag.hi{background:var(--p-red);color:#fff}
+.ftag.mid{background:var(--p-blue);color:#fff}
+.ftag.lo{background:var(--p-green);color:#fff}
+.meals{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.meal{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface-2);min-width:0}
+.meal .mt{display:inline-grid;place-items:center;min-width:34px;height:26px;padding:0 8px;border-radius:13px;background:var(--ink);color:var(--surface);font-weight:700;font-size:13px;margin-bottom:6px}
+.meal ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:14.5px}
+.meal small{color:var(--muted);font-size:12px;margin-left:2px}
+.meal b{font-weight:700}
+.swaps{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:560px){.swaps{grid-template-columns:minmax(0,1fr)}}
+.swaps>div{border-top:2px solid var(--line);padding-top:8px;font-size:13.5px}
+.swaps ul{margin:6px 0 0;padding-left:1.1em;columns:2;column-gap:18px}
+.fdet summary{cursor:pointer;color:var(--muted);font-size:13px}
+.sets{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.sd{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:var(--surface);color:var(--muted);font:600 12px var(--f-num);cursor:pointer;padding:0;display:grid;place-items:center}
+.sd.on{background:var(--p-green);border-color:var(--p-green);color:#fff}
+.stepw{display:inline-flex;align-items:stretch}
+.stp{display:flex;flex-direction:column;margin-left:3px;gap:2px}
+.stp button{flex:1;min-height:18px;width:30px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:5px;font-size:10px;line-height:1;padding:0;cursor:pointer;display:grid;place-items:center}
+.stp button:active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.num{display:flex;align-items:stretch}
+.num input{flex:1;min-width:0;padding-right:8px!important}
+.num>span:not(.stp){display:none}
+.num .stp{position:static;transform:none;pointer-events:auto;font-size:inherit}
+.cbtn{display:inline-flex;align-items:center;margin-left:4px;align-self:center;border:0;background:var(--p-red);color:#fff;border-radius:999px;padding:4px 11px;font:700 11.5px var(--f-body);cursor:pointer;white-space:nowrap}
+.restv.cntv{background:#16112a}
+.restv.cntv .rest-fill{background:#5b3fc4}
+#cv-name{font-size:17px;font-weight:700}
+#cv-set,#cv-goal{font-size:13px;opacity:.85}
+#cv-n{font:600 clamp(110px,34vw,190px)/1 var(--f-num);font-variant-numeric:tabular-nums}
+#cv-ph{font-size:20px;font-weight:700;letter-spacing:.1em}
+#cv-done{background:#fff!important;color:#3a2a8a!important}
+.vrow2{display:flex;gap:6px}
+.vrow2 select{flex:1;min-width:0}
+.hq{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface-2)}
+.hq summary{cursor:pointer;font-weight:700;color:var(--accent)}
+.hq-row{display:flex;align-items:center;gap:8px;margin:8px 0}
+#hq-status{flex:1;min-width:0;font-size:12.5px;overflow-wrap:anywhere}
+.hq-row .tryb{padding:7px 10px}
+.hq ol{margin:4px 0 8px;padding-left:1.3em;display:flex;flex-direction:column;gap:2px}
+.hq [hidden]{display:none}
+.ai-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.ai-row[hidden]{display:none}
+#ai-status{flex:1;min-width:0;font-size:12.5px;color:var(--ink)}
+.ai-row .tryb{padding:7px 12px}
+.ai-row .tryb[hidden]{display:none}
+.seg input:disabled+span{opacity:.45;cursor:not-allowed}
+.ai-n{font-size:13px;opacity:.85}
+.ai-n:empty{display:none}
+.tryb{flex:none;border:0;border-radius:8px;padding:0 12px;background:var(--accent);color:var(--accent-ink);font:700 13px var(--f-body);cursor:pointer}
+#sdo{width:100%;accent-color:var(--p-red)}
+.vsl{width:100%;accent-color:var(--accent)}
+.vv{font:600 12px var(--f-num);color:var(--accent)}
+.grp-h{border-top:1px solid var(--line);padding-top:14px;margin-top:2px}
+.seg.halves{flex-wrap:nowrap}.seg.halves label{flex:1 1 0;min-width:0}.seg.halves span{text-align:center}
+.sdo-ticks{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)}
+.sdo-l{font-family:var(--f-display);font-weight:400;font-size:15px;color:var(--p-red);letter-spacing:0}
+.rec{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:8px}
+.rec label{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.rec input{width:64px;font:600 15px var(--f-num);padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);-webkit-user-select:text;user-select:text}
+.sug{margin-top:6px;font-size:12px;line-height:1.5;display:flex;flex-direction:column}
+.sug span{color:var(--muted);font-family:var(--f-num);font-size:11.5px}
+.sug b{font-weight:700}
+.sug.up b{color:var(--p-red)}.sug.keep b{color:var(--accent)}.sug.down b{color:var(--warn-ink)}.sug.new b{color:var(--muted);font-weight:500}
+.ex tr.fin td{background:color-mix(in srgb,var(--p-green) 9%,transparent)}
+.prog{margin-left:auto;flex:none;font:600 13px var(--f-num);padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--muted)}
+.prog.all{background:var(--p-green);color:#fff}
+.tbtn{display:inline-flex;align-items:center;gap:4px;margin-left:4px;align-self:center;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:3px 9px;font:600 11.5px var(--f-body);cursor:pointer;white-space:nowrap}
+.tbtn:hover{border-color:var(--accent);color:var(--accent)}
+.clk{width:13px;height:13px;flex:none}
+.sh-tm{display:flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:10px;padding:12px;background:var(--accent);color:var(--accent-ink);font:700 15px var(--f-body);cursor:pointer}
+.sh-tm .clk{width:16px;height:16px}
+.restv{position:fixed;inset:0;z-index:50;background:#0f141c;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.restv[hidden]{display:none!important}
+.rest-fill{position:absolute;left:0;right:0;bottom:0;height:0%;background:hsl(220 70% 45%)}
+.rest-in{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:24px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));width:100%;max-width:520px}
+#tm-name{font-size:17px;font-weight:700}
+#tm-set{font-size:13px;opacity:.8}
+#tm-t{font:600 clamp(72px,22vw,128px)/1 var(--f-num);font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin:6px 0}
+#tm-sub{font-size:14px;opacity:.85}
+.restv.done #tm-t{font:400 clamp(34px,10vw,52px)/1.2 var(--f-display)}
+.tm-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.tm-btns button{border:0;border-radius:10px;padding:12px 16px;font:700 15px var(--f-body);background:rgba(255,255,255,.18);color:#fff;cursor:pointer;min-width:76px}
+#tm-r{display:none}
+.restv.done #tm-r{display:block;background:#fff;color:#1d6b37}
+.restv.done #tm-m,.restv.done #tm-p{display:none}
+@media (prefers-reduced-motion:no-preference){.restv.done .rest-fill{animation:pulse 1.2s ease-in-out infinite}}
+@keyframes pulse{50%{filter:brightness(1.15)}}
+.parts{display:flex;flex-direction:column;gap:5px}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.prow .pn{font-size:14px;font-weight:500}
+.lv{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.lv label{position:relative;cursor:pointer}
+.lv input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.lv span{display:block;padding:5px 9px;font-size:12.5px;background:var(--surface-2);user-select:none;border-left:1px solid var(--line)}
+.lv label:first-child span{border-left:0}
+.lv input:checked+span{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.lv input[value="2"]:checked+span{background:var(--p-red);color:#fff}
+.lv label:focus-within{outline:2px solid var(--accent);outline-offset:-2px}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;padding:0 6px;border-radius:4px;margin-left:5px;vertical-align:1px}
+.tag.l1{background:var(--chip);color:var(--accent)}
+.tag.l2{background:var(--p-red);color:#fff}
+.ex tr.l2 td:first-child{box-shadow:inset 3px 0 0 var(--p-red)}
+.ex tr[data-ex]{cursor:pointer;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;position:relative}
+.ex tr[data-ex] td{transition:background .15s}
+.ex tr.pressing td{background:var(--chip)}
+.ex tr[data-ex]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.flash{animation:flash .7s ease-out}
+@keyframes flash{from{background:var(--chip)}to{background:transparent}}
+.mbar{display:none}
+@media (max-width:880px){
+.mbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;align-items:center;gap:10px;background:var(--ink);color:var(--surface);padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));font-size:13px}
+.mbar span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mbar button{border:0;border-radius:8px;padding:8px 12px;font:700 13px var(--f-body);background:var(--accent);color:var(--accent-ink);cursor:pointer;flex:none}
+.wrap{padding-bottom:90px}
+}
+.sheet{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(10,14,20,.55);padding:16px}
+.sheet[hidden]{display:none!important}
+.sheet-in{background:var(--surface);color:var(--ink);border-radius:14px;width:100%;max-width:420px;max-height:calc(100% - 20px);overflow:auto;padding:16px 16px 18px;display:flex;flex-direction:column;gap:10px}
+@media (max-width:600px){.sheet{align-items:flex-end;padding:0}.sheet-in{border-radius:16px 16px 0 0;max-width:none;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}}
+.sheet-h{display:flex;align-items:flex-start;gap:10px}
+.sheet-h div{flex:1;min-width:0}
+.sheet-h small{display:block;color:var(--muted);font-size:12px}
+.sheet-h b{font-family:var(--f-display);font-weight:400;font-size:20px;line-height:1.3}
+.sheet-x{border:0;background:var(--chip);color:var(--ink);width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;flex:none}
+.fig{width:100%;aspect-ratio:200/184;max-width:100%;background:var(--surface-2);border-radius:10px;display:block}
+.sheet ul{margin:0;padding-left:1.2em;font-size:14px;display:flex;flex-direction:column;gap:3px}
+.sheet .sr2{font:600 14px var(--f-num)}
+</style>
+
+<div class="wrap">
+<header class="top">
+<h1>トレーニング計画メーカー</h1>
+<p>体格・目的・期間から、週ごとのメニューと食事の目安を組み立てます</p>
+</header>
+<div class="grid">
+<aside class="panel" aria-label="条件">
+<div class="field">
+<span class="lbl">性別</span>
+<div class="seg">
+<label><input type="radio" name="sex" id="sex-m" value="m" checked><span>男性</span></label>
+<label><input type="radio" name="sex" id="sex-f" value="f"><span>女性</span></label>
+</div>
+</div>
+<div class="row3">
+<div class="field"><label class="lbl" for="age">年齢（歳）</label><div class="num"><input id="age" type="number" inputmode="numeric" min="14" max="85" value="38"><span>歳</span></div></div>
+<div class="field"><label class="lbl" for="height">身長（cm）</label><div class="num"><input id="height" type="number" inputmode="decimal" min="130" max="215" value="172"><span>cm</span></div></div>
+<div class="field"><label class="lbl" for="weight">体重（kg）</label><div class="num"><input id="weight" type="number" inputmode="decimal" min="35" max="200" value="68"><span>kg</span></div></div>
+</div>
+<div class="field">
+<label class="lbl" for="exp">トレーニング歴</label>
+<select id="exp">
+<option value="0">初心者（1年未満・久しぶり）</option>
+<option value="1" selected>中級（1〜3年）</option>
+<option value="2">上級（3年以上）</option>
+</select>
+</div>
+<div class="field">
+<span class="lbl">目的</span>
+<div class="seg goal">
+<label><input type="radio" name="goal" id="g-hyp" value="hyp" checked><span>筋肥大<small>ナチュラルで筋肉を増やす</small></span></label>
+<label><input type="radio" name="goal" id="g-str" value="str"><span>筋力アップ<small>挙げられる重量を伸ばす</small></span></label>
+<label><input type="radio" name="goal" id="g-end" value="end"><span>持久力<small>心肺と筋持久力</small></span></label>
+<label><input type="radio" name="goal" id="g-cut" value="cut"><span>引き締め<small>脂肪を落として筋肉は維持</small></span></label>
+</div>
+</div>
+<div class="field">
+<span class="lbl">部位ごとの鍛え方</span>
+<div class="parts" id="parts"></div>
+<p class="hint">ナチュラル＝自然な筋肉の付き方。バキバキ＝その部位を最優先で、セット数・種目を最大まで増やします。</p>
+<div class="chips">
+<label><input type="checkbox" id="f-cardio" value="cardio"><span>持久力（心肺）も鍛える</span></label>
+</div>
+</div>
+<div class="field">
+<span class="lbl">週のトレーニング日数</span>
+<div class="seg dn">
+<label><input type="radio" name="days" id="d2" value="2"><span>2日</span></label>
+<label><input type="radio" name="days" id="d3" value="3"><span>3日</span></label>
+<label><input type="radio" name="days" id="d4" value="4" checked><span>4日</span></label>
+<label><input type="radio" name="days" id="d5" value="5"><span>5日</span></label>
+<label><input type="radio" name="days" id="d6" value="6"><span>6日</span></label>
+</div>
+</div>
+<div class="field">
+<label class="lbl" for="start">開始曜日</label>
+<select id="start">
+<option value="1">月曜</option><option value="2">火曜</option><option value="3">水曜</option><option value="4">木曜</option><option value="5">金曜</option><option value="6" selected>土曜</option><option value="0">日曜</option>
+</select>
+</div>
+<div class="field">
+<span class="lbl">トレーニング環境</span>
+<div class="seg">
+<label><input type="radio" name="eq" id="eq-gym" value="gym" checked><span>ジム</span></label>
+<label><input type="radio" name="eq" id="eq-db" value="db"><span>自宅ダンベル</span></label>
+<label><input type="radio" name="eq" id="eq-bw" value="bw"><span>自重のみ</span></label>
+</div>
+</div>
+<div class="field">
+<span class="lbl">プロテイン</span>
+<div class="seg">
+<label><input type="radio" name="pro" id="pro-y" value="y" checked><span>飲む</span></label>
+<label><input type="radio" name="pro" id="pro-n" value="n"><span>飲まない</span></label>
+</div>
+</div>
+<div class="field grp-h"><span class="lbl">トレーナー</span></div>
+<div class="field">
+<span class="lbl">トレーナーの性別</span>
+<div class="seg halves">
+<label><input type="radio" name="vg" id="vg-f" value="f" checked><span>女性</span></label>
+<label><input type="radio" name="vg" id="vg-m" value="m"><span>男性</span></label>
+</div>
+</div>
+<div class="field">
+<label class="lbl" for="sdo">口調　<b id="sdo-l" class="sdo-l"></b></label>
+<input type="range" id="sdo" min="0" max="4" step="1" value="2">
+<div class="sdo-ticks"><span>甘い</span><span>やさしい</span><span>ふつう</span><span>きびしめ</span><span>ドS</span></div>
+</div>
+<div class="field">
+<span class="lbl">話し方</span>
+<div class="seg">
+<label><input type="radio" name="dia" id="dia-std" value="std" checked><span>標準語</span></label>
+<label><input type="radio" name="dia" id="dia-kan" value="kan"><span>関西弁</span></label>
+<label><input type="radio" name="dia" id="dia-ngy" value="ngy"><span>名古屋弁</span></label>
+<label><input type="radio" name="dia" id="dia-hkt" value="hkt"><span>博多弁</span></label>
+<label><input type="radio" name="dia" id="dia-gai" value="gai"><span>外国人風</span></label>
+</div>
+<p class="hint">方言は言葉づかいが変わります（アクセントは読み上げの声のままです）。外国人風はカタコトの日本語で話し、英語の声があれば英語のひとことと数字が入ります。</p>
+</div>
+<div class="field">
+<span class="lbl">セリフ</span>
+<div class="seg halves">
+<label><input type="radio" name="lines" id="lines-fixed" value="fixed" checked><span>定型</span></label>
+<label><input type="radio" name="lines" id="lines-ai" value="ai"><span>AIが作る</span></label>
+</div>
+<div class="ai-row" id="ai-row" hidden><span id="ai-status" role="status" aria-live="polite"></span><button type="button" class="tryb" id="ai-make">今日のセリフを作る</button></div>
+<p class="hint">AIはトレーニングの日に1回だけ、その日のメニューに合わせたセリフ一式を作ります（1回あたり約2,000トークン、初回は利用の確認が出ます）。作れないときは定型のセリフを使います。</p>
+</div>
+<div class="field">
+<label class="lbl" for="vsel">声</label>
+<div class="vrow2"><select id="vsel"><option value="">おまかせ（女性）</option></select><button type="button" class="tryb" id="vtry">▶ 試しに聞く</button></div>
+<p class="hint" id="vnote">スマホに入っている日本語の声から選べます。</p>
+<details id="hq" class="hq">
+<summary>高音質の声を入れる</summary>
+<div class="hq-row"><span id="hq-status" role="status" aria-live="polite"></span><button type="button" class="tryb" id="hq-reload">声を読み込み直す</button></div>
+<div id="hq-ios"><b>iPhone・iPad</b>
+<ol><li>「設定」→「アクセシビリティ」→「読み上げコンテンツ」→「声」</li><li>「日本語」→「Kyoko」（または Otoya／Hattori／O-ren）</li><li>「拡張」か「プレミアム」をダウンロード（数百MB、Wi-Fi推奨）</li><li>このページに戻って「声を読み込み直す」</li></ol>
+<p class="hint">声の一覧を取得できない画面でも、ここで日本語の「声」に選んだ声が標準の声として使われることがあります。</p>
+</div>
+<div id="hq-and"><b>Android</b>
+<ol><li>「設定」→「一般管理」（または「システム」）→「言語と入力」→「テキスト読み上げ」</li><li>優先エンジン「Googleの音声サービス」の⚙ →「音声データをインストール」</li><li>「日本語」→ 高品質（またはネットワーク）の声をダウンロード</li><li>このページに戻って「声を読み込み直す」</li></ol>
+</div>
+<p class="hint">このアプリに声を入れることはできません。スマホの読み上げの声を使います。</p>
+</details>
+</div>
+<div class="field">
+<label class="lbl" for="vpitch">声の高さ　<b class="vv" id="vpitch-v"></b></label>
+<input type="range" id="vpitch" min="-0.2" max="0.2" step="0.05" value="0" class="vsl">
+<div class="sdo-ticks"><span>低く</span><span>自動</span><span>高く</span></div>
+</div>
+<div class="field">
+<label class="lbl" for="vrate">話す速さ　<b class="vv" id="vrate-v"></b></label>
+<input type="range" id="vrate" min="-0.2" max="0.2" step="0.05" value="0" class="vsl">
+<div class="sdo-ticks"><span>ゆっくり</span><span>自動</span><span>早く</span></div>
+</div>
+<div class="field">
+<span class="lbl">声と音のガイド（イヤホン推奨）</span>
+<div class="seg">
+<label><input type="radio" name="voice" id="vo-on" value="on" checked><span>オン</span></label>
+<label><input type="radio" name="voice" id="vo-off" value="off"><span>オフ</span></label>
+</div>
+</div>
+<div class="field">
+<span class="lbl">回数カウントの速さ（1回あたり）</span>
+<div class="seg">
+<label><input type="radio" name="tempo" id="tp-2" value="2"><span>はやめ 2秒</span></label>
+<label><input type="radio" name="tempo" id="tp-3" value="3" checked><span>ふつう 3秒</span></label>
+<label><input type="radio" name="tempo" id="tp-4" value="4"><span>ゆっくり 4秒</span></label>
+</div>
+</div>
+<div class="field">
+<label class="lbl" for="weeks">目標期間</label>
+<select id="weeks">
+<option value="4">4週間（1か月）</option>
+<option value="8">8週間（約2か月）</option>
+<option value="12" selected>12週間（約3か月）</option>
+<option value="16">16週間（約4か月）</option>
+<option value="24">24週間（約半年）</option>
+<option value="36">36週間（約9か月）</option>
+<option value="52">52週間（1年）</option>
+</select>
+</div>
+<p class="hint">入力を変えるとすぐに計画が組み直されます。入力内容はこのブラウザにだけ保存されます。</p>
+</aside>
+
+<main id="out"></main>
+</div>
+</div>
+<div class="mbar"><span id="mbar-t"></span><button type="button" id="mbar-go">計画を見る ↓</button></div>
+
+<script>
+(function(){
+const G={chest:'胸',back:'背中',shoulders:'肩',arms:'腕',quads:'前もも',glutes:'お尻・もも裏',calves:'ふくらはぎ',core:'体幹・腹筋'};
+const ORDER=['chest','back','shoulders','arms','quads','glutes','calves','core'];
+// [種目名, c=多関節 / i=単関節]
+const EX={
+chest:{gym:[['ベンチプレス','c'],['インクライン・ダンベルプレス','c'],['ケーブルフライ','i'],['ディップス','c'],['マシン・チェストプレス','c'],['ペックデック','i']],
+db:[['ダンベルプレス','c'],['インクライン・ダンベルプレス','c'],['ダンベルフライ','i'],['プッシュアップ（加重可）','c']],
+bw:[['プッシュアップ','c'],['足上げプッシュアップ','c'],['椅子ディップス','c'],['3秒ネガティブ・プッシュアップ','i']]},
+back:{gym:[['懸垂 / ラットプルダウン','c'],['バーベルロウ','c'],['シーテッド・ケーブルロウ','c'],['ストレートアーム・プルダウン','i'],['ワンハンド・ダンベルロウ','c'],['チェストサポート・ロウ','c']],
+db:[['ワンハンド・ダンベルロウ','c'],['ダンベル・ベントオーバーロウ','c'],['ダンベル・プルオーバー','i'],['懸垂（ドアバー）','c']],
+bw:[['懸垂 / 斜め懸垂','c'],['テーブル・インバーテッドロウ','c'],['タオルロウ（柱などに掛けて）','c'],['プローン・Y-Tレイズ','i']]},
+shoulders:{gym:[['オーバーヘッドプレス','c'],['サイドレイズ','i'],['リアデルト・フライ','i'],['マシン・ショルダープレス','c'],['ケーブル・サイドレイズ','i']],
+db:[['ダンベル・ショルダープレス','c'],['サイドレイズ','i'],['リアレイズ','i'],['アーノルドプレス','c']],
+bw:[['パイク・プッシュアップ','c'],['壁倒立ホールド / プッシュアップ','c'],['プローン・Y-T-Wレイズ','i']]},
+arms:{gym:[['EZバーカール','i'],['ケーブル・プレスダウン','i'],['インクライン・ダンベルカール','i'],['オーバーヘッド・ケーブルエクステンション','i'],['ハンマーカール','i'],['ナローベンチプレス','c']],
+db:[['ダンベルカール','i'],['フレンチプレス','i'],['ハンマーカール','i'],['キックバック','i']],
+bw:[['チンアップ（逆手懸垂）','c'],['ダイヤモンド・プッシュアップ','c'],['タオルカール','i'],['ベンチディップス','i']]},
+quads:{gym:[['バックスクワット','c'],['レッグプレス','c'],['ブルガリアン・スクワット','c'],['レッグエクステンション','i'],['ハックスクワット','c']],
+db:[['ゴブレット・スクワット','c'],['ブルガリアン・スクワット','c'],['ダンベル・ランジ','c'],['ステップアップ','c']],
+bw:[['スクワット（ゆっくり下ろす）','c'],['ブルガリアン・スクワット','c'],['ジャンプスクワット','c'],['シシースクワット','i']]},
+glutes:{gym:[['ルーマニアン・デッドリフト','c'],['ヒップスラスト','c'],['ライイング・レッグカール','i'],['45°バックエクステンション','i'],['シーテッド・レッグカール','i']],
+db:[['ダンベル・ルーマニアンDL','c'],['ダンベル・ヒップスラスト','c'],['シングルレッグRDL','c'],['グルートブリッジ','i']],
+bw:[['片脚ヒップリフト','c'],['ノルディック・ハムカール','i'],['スライディング・レッグカール','i'],['片脚ルーマニアンDL','c']]},
+calves:{gym:[['スタンディング・カーフレイズ','i'],['シーテッド・カーフレイズ','i']],
+db:[['ダンベル・カーフレイズ（段差）','i'],['片脚カーフレイズ','i']],
+bw:[['片脚カーフレイズ（段差）','i'],['両脚カーフレイズ（3秒キープ）','i']]},
+core:{gym:[['ハンギング・レッグレイズ','i'],['ケーブルクランチ','i'],['パロフプレス','i'],['アブローラー','i']],
+db:[['アブローラー / デッドバグ','i'],['ダンベル・サイドベント','i'],['ロシアンツイスト','i']],
+bw:[['プランク','i'],['デッドバグ','i'],['サイドプランク','i'],['レッグレイズ','i']]}
+};
+const OFF={2:[0,3],3:[0,2,4],4:[0,1,3,4],5:[0,1,2,4,5],6:[0,1,2,3,4,5]};
+const DOW=['日','月','火','水','木','金','土'];
+function firstDay(s){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+((s.start-d.getDay()+7)%7));return d}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function md(d){return (d.getMonth()+1)+'/'+d.getDate()}
+const GOALN={hyp:'筋肥大',str:'筋力アップ',end:'持久力',cut:'引き締め'};
+const EXPN=['初心者','中級','上級'];
+
+const $=id=>document.getElementById(id);
+const out=$('out');
+let selWeek=0;
+
+function read(){
+const v=n=>document.querySelector('input[name="'+n+'"]:checked').value;
+const num=(id,lo,hi,def)=>{const x=parseFloat($(id).value);return isFinite(x)?Math.min(hi,Math.max(lo,x)):def};
+return {sex:v('sex'),goal:v('goal'),days:+v('days'),eq:v('eq'),
+age:num('age',14,85,35),h:num('height',130,215,170),w:num('weight',35,200,65),
+exp:+$('exp').value,weeks:+$('weeks').value,start:+$('start').value,
+lv:Object.fromEntries(ORDER.map(g=>[g,+((document.querySelector('input[name="lv-'+g+'"]:checked')||{}).value||0)])),
+cardioOn:$('f-cardio').checked,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),vg:v('vg'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
+get focus(){return ORDER.filter(g=>this.lv[g]>0).concat(this.cardioOn?['cardio']:[])}};
+}
+(function buildParts(){
+const def={chest:2,back:1};
+$('parts').innerHTML=ORDER.map(g=>'<div class="prow"><span class="pn">'+G[g]+'</span><div class="lv" role="radiogroup" aria-label="'+G[g]+'">'+
+['なし','ナチュラル','バキバキ'].map((t,i)=>'<label><input type="radio" name="lv-'+g+'" id="lv-'+g+'-'+i+'" value="'+i+'"'+((def[g]||0)===i?' checked':'')+'><span>'+t+'</span></label>').join('')+'</div></div>').join('');
+})();
+
+function splitFor(days){
+const U=['chest','back','shoulders','arms'],L=['quads','glutes','calves','core'],F=[...U,...L];
+if(days<=3) return Array.from({length:days},(_,i)=>({name:'全身 '+'ABC'[i],groups:F}));
+if(days===4) return [{name:'上半身 A',groups:U},{name:'下半身 A',groups:L},{name:'上半身 B',groups:U},{name:'下半身 B',groups:L}];
+const P={name:'プッシュ（押す）',groups:['chest','shoulders','arms']},Q={name:'プル（引く）',groups:['back','arms','core']},Lg={name:'脚',groups:['quads','glutes','calves','core']};
+if(days===5) return [{name:'上半身',groups:U},{name:'下半身',groups:L},P,Q,{name:'脚',groups:['quads','glutes','calves']}];
+return [P,Q,Lg,{...P,name:P.name+' B'},{...Q,name:Q.name+' B'},{...Lg,name:'脚 B'}];
+}
+
+function phases(s){
+const bl=[7,5,4][s.exp]; // 1ブロックの週数（最終週が回復週）
+const arr=[];let blockNo=1;
+for(let i=0;i<s.weeks;i++){
+const pos=i%bl; if(pos===0&&i>0) blockNo++;
+let type,t=0;
+if(i===s.weeks-1&&s.weeks>=8) type='test';
+else if(pos===bl-1) type='deload';
+else {t=bl>2?pos/(bl-2):1; type=(pos===bl-2)?'peak':'load';}
+arr.push({i,type,t,block:blockNo});
+}
+return arr;
+}
+
+function rirFor(s,w){
+if(w.type==='deload') return 4;
+if(w.type==='test') return 2;
+const hi=[3,3,2][s.exp], lo=[2,1,0][s.exp];
+const r=Math.round(hi-(hi-lo)*w.t);
+return s.goal==='end'?Math.max(r,2):r;
+}
+function multFor(w){
+if(w.type==='deload') return .5;
+if(w.type==='test') return .6;
+return .8+.3*w.t;
+}
+
+function compute(s){
+const bmi=s.w/Math.pow(s.h/100,2);
+const bmr=10*s.w+6.25*s.h-5*s.age+(s.sex==='m'?5:-161);
+const act=Math.min(1.7,1.25+.07*s.days);
+const tdee=bmr*act;
+const notes=[];
+let adj=0;
+if(s.goal==='hyp'){adj=[350,250,150][s.exp]; if(bmi<18.5) adj+=150; if(bmi>=27){adj=0;notes.push('BMIが高めなので、増量ではなく「体重維持のまま筋肉を増やす」設定にしています。体脂肪が落ちてきたら少しずつ増量に切り替えてください。');}}
+if(s.goal==='str') adj=bmi>=27?0:200;
+if(s.goal==='end') adj=0;
+if(s.goal==='cut'){adj=bmi>=23?-400:-250; if(bmi<20){adj=0;notes.push('BMIが低めなので、減量はせず体重維持で引き締める設定にしています。');}}
+if(s.sex==='f') adj=Math.round(adj*.8);
+const kcal=Math.round((tdee+adj)/10)*10;
+const pPerKg={hyp:2.0,str:1.8,end:1.6,cut:2.2}[s.goal];
+const p=Math.round(s.w*pPerKg);
+const f=Math.round(Math.max(.8*s.w,kcal*.25/9));
+const c=Math.max(0,Math.round((kcal-p*4-f*9)/4));
+if(bmi<18.5) notes.push('BMIが18.5未満です。食事量を確保することが一番の近道です。');
+if(s.age<18) notes.push('成長期は重量よりフォームを優先し、できれば指導者のいる環境で行ってください。');
+if(s.age>=50) notes.push('50歳以上の設定として、セット数を1割減らし、余力を多めに残すようにしています。ウォームアップは10分以上が目安です。');
+if(s.weeks<=4) notes.push('1か月では筋力やフォームは伸びますが、見た目の変化はまだ小さい時期です。続ける場合は期間を延ばすと回復週・測定週まで組み込まれます。');
+if(s.eq==='bw'&&s.goal==='hyp'&&s.exp===2) notes.push('上級者の筋肥大は自重だけだと負荷不足になりやすいです。リュックに荷物を入れるなどで加重してください。');
+if(s.goal==='hyp'&&s.days===2) notes.push('週2日でも伸びますが、各部位を週2回刺激できる週3日以上のほうが効率的です。');
+
+// 見込み
+let monthly=(s.sex==='m'?[.9,.45,.2]:[.45,.22,.1])[s.exp];
+if(s.age>=40) monthly*=.85; if(s.age>=55) monthly*=.8;
+const months=s.weeks/4.345;
+let outcome;
+if(s.goal==='hyp'){
+const lean=monthly*months*(adj>0?1:.6);
+const bw=adj>0?lean*1.6:lean*.3;
+outcome={k:'筋肉量の見込み',v:'+'+(lean*.7).toFixed(1)+'〜'+(lean*1.2).toFixed(1),u:'kg',s:'体重は +'+(bw*.7).toFixed(1)+'〜'+(bw*1.2).toFixed(1)+'kg 程度'};
+}else if(s.goal==='str'){
+const per12=[[20,35],[8,14],[3,6]][s.exp], sc=Math.min(1.8,Math.sqrt(s.weeks/12));
+outcome={k:'主要種目の挙上重量',v:'+'+Math.round(per12[0]*sc)+'〜'+Math.round(per12[1]*sc),u:'%',s:'スクワット・プレス系の目安'};
+}else if(s.goal==='end'){
+const z=Math.min(60,Math.round(25*Math.pow(1.06,Math.min(s.weeks,30)*.75)));
+outcome={k:'有酸素の継続時間',v:'25→'+z,u:'分',s:'会話できる強度で続けられる時間'};
+}else{
+const fat=adj<0?(-adj*7*s.weeks*.85)/7200:0;
+outcome=adj<0?{k:'体脂肪の見込み',v:'−'+(fat*.8).toFixed(1)+'〜'+(fat*1.1).toFixed(1),u:'kg',s:'筋肉は維持しながら'}:{k:'体重',v:'±0',u:'kg',s:'体重は維持し見た目を締める'};
+}
+
+// 週あたりセット数
+const base={hyp:[10,14,16],str:[8,10,12],end:[6,8,10],cut:[10,12,14]}[s.goal][s.exp]*(s.age>=50?.9:1);
+const fset=new Set(s.focus.filter(x=>x!=='cardio'));
+const vol={};
+const n2=ORDER.filter(g=>s.lv[g]===2).length;
+ORDER.forEach(g=>{
+let v;
+const L=s.lv[g];
+if(fset.size===0) v=base;
+else if(L===2) v=Math.min(24,Math.max(16,base*1.7));
+else if(L===1) v=Math.min(20,base*1.2);
+else v=base*(n2>=3?.6:.8);
+if((g==='calves'||g==='core')&&L===0) v=Math.min(v*.6,8);
+vol[g]=Math.max(3,Math.round(v));
+});
+if(n2>=4) notes.push('バキバキの部位が'+n2+'か所あります。全部を最大量にすると回復が追いつきにくいので、きつい時は2〜3か所に絞ってください。');
+const cardio=s.goal==='end'||s.focus.includes('cardio');
+return {bmi,bmr,tdee,kcal,adj,p,f,c,notes,outcome,vol,fset,cardio,split:splitFor(s.days),ph:phases(s)};
+}
+
+function foodPlan(s,R){
+const shake=s.pro==='y'?20:0;
+const cups=Math.max(1.5,Math.round(R.c*.75/55*2)/2);
+const sp=s.goal==='cut'?[.35,.4,.25]:[.3,.35,.35];
+const m=sp.map(x=>Math.max(.5,Math.round(cups*x*2)/2));
+m[1]=Math.max(.5,m[1]+cups-(m[0]+m[1]+m[2]));
+const rest=R.p-20-shake-cups*3.8-10;
+let snack=0,per=rest/2/.22;
+if(per>200){snack=25;per=(rest-25)/2/.22;}
+per=Math.min(250,Math.max(80,Math.round(per/10)*10));
+const pk=R.p/s.w;
+const tags=[[pk>=2?'肉・魚 多め':pk>=1.7?'肉・魚 しっかり':'肉・魚 ふつう',pk>=2?'hi':'mid'],
+[cups>=5?'米 多め':cups>=3.5?'米 ふつう':'米 ひかえめ',cups>=5?'hi':cups>=3.5?'mid':'lo']];
+if(s.goal==='cut') tags.push(['揚げ物ひかえめ','lo']);
+if(s.goal==='hyp') tags.push(['食べる量を減らさない','mid']);
+const adjust=s.goal==='hyp'?'2週間で体重が増えていなければ、夜のご飯を半杯増やす。月に1kg以上増えるなら半杯減らす。':
+s.goal==='cut'?'2週間で体重が減っていなければ、夜のご飯を半杯減らす。肉・魚の量は減らさない。':
+'2週間で体重が1kg以上動いたら、夜のご飯を半杯ずつ増減して戻す。';
+return {cups,m,per,snack,shake,tags,adjust};
+}
+
+function reps(goal,kind,g){
+if(g==='core') return {r:goal==='end'?'15–20回 / 45秒':'10–15回 / 30–45秒',rest:'45秒'};
+if(g==='calves') return {r:goal==='end'?'20–25':'10–20',rest:'60秒'};
+const T={hyp:{c:['6–10','2〜3分'],i:['10–15','60〜90秒']},str:{c:['3–6','3〜4分'],i:['8–12','90秒']},
+end:{c:['12–20','60秒'],i:['15–25','30〜45秒']},cut:{c:['6–10','2分'],i:['10–15','60秒']}}[goal][kind];
+return {r:T[0],rest:T[1]};
+}
+
+function buildWeek(s,R,w){
+const mult=multFor(w), freq={};
+R.split.forEach(d=>d.groups.forEach(g=>freq[g]=(freq[g]||0)+1));
+const seen={};
+return R.split.map((d,di)=>{
+const rows=[];
+d.groups.forEach(g=>{
+const k=seen[g]=(seen[g]||0)+1;
+let sets=Math.round(R.vol[g]*mult/freq[g]);
+sets=Math.min(10,Math.max(w.type==='deload'?1:2,sets));
+let n=sets<=4?1:sets<=8?2:3; if(g==='arms'&&sets>=2) n=Math.max(2,n);
+if(s.lv[g]===2&&sets>=4) n=Math.max(n,sets>=7?3:2);
+const L=EX[g][s.eq]; n=Math.min(n,L.length);
+const start=((k-1)*n)%L.length;
+let picks=Array.from({length:n},(_,j)=>L[(start+j)%L.length]);
+picks.sort((a,b)=>(a[1]==='c'?0:1)-(b[1]==='c'?0:1));
+picks.forEach((ex,j)=>{
+const ps=Math.floor(sets/n)+(j<sets%n?1:0);
+const rp=reps(s.goal,ex[1],g);
+rows.push({g,name:ex[0],sets:ps,r:rp.r,rest:rp.rest,kind:ex[1]});
+});
+});
+rows.sort((a,b)=>{const pa=(a.g==='core'||a.g==='calves')?2:(a.kind==='c'?0:1),pb=(b.g==='core'||b.g==='calves')?2:(b.kind==='c'?0:1);return pa-pb||(R.fset.has(b.g)-R.fset.has(a.g))});
+return {dow:DOW[(s.start+OFF[s.days][di])%7],date:md(addDays(firstDay(s),w.i*7+OFF[s.days][di])),name:d.name,groups:d.groups,rows};
+});
+}
+
+function cardioText(s,R,w,idx){
+const loadIdx=R.ph.slice(0,w.i+1).filter(x=>x.type==='load'||x.type==='peak').length;
+let z2=Math.min(60,Math.round(25*Math.pow(1.06,loadIdx*.75)/5)*5);
+if(w.type==='deload') z2=Math.round(z2*.7/5)*5;
+const ivN=Math.min(6,3+Math.floor(loadIdx/3));
+if(R.cardio){
+if(idx===0) return '有酸素：ゾーン2（会話できる強度）'+z2+'分';
+if(idx===R.split.length-1) return w.type==='deload'?'有酸素：ゾーン2 '+z2+'分（インターバルは休み）':'有酸素：4分きつめ＋3分ゆっくり × '+ivN+'本';
+if(R.split.length>=4&&idx===2) return '有酸素：ゾーン2 '+Math.round(z2*.7/5)*5+'分';
+return '';
+}
+return '';
+}
+
+function esc(t){return String(t)}
+
+function render(){
+const s=read(); save(s);
+const R=compute(s);
+if(selWeek>=s.weeks) selWeek=0;
+const w=R.ph[selWeek];
+const days=buildWeek(s,R,w);
+const typeN={load:'積み上げ週',peak:'追い込み週',deload:'回復週',test:'測定週'};
+const fnames=s.focus.map(f=>f==='cardio'?'持久力':G[f]+(s.lv[f]===2?'（バキバキ）':''));
+const totalSets=Object.values(R.vol).reduce((a,b)=>a+b,0);
+const maxV=Math.max(...Object.values(R.vol),22);
+
+let h='';
+h+='<div class="plan-head"><span class="eyebrow">'+s.weeks+'週間プログラム ・ '+EXPN[s.exp]+' ・ 週'+s.days+'日</span>';
+h+='<h2>'+GOALN[s.goal]+(s.goal==='hyp'?'（ナチュラル）':'')+'プラン</h2>';
+h+='<p>重点：'+(fnames.length?fnames.join('・'):'全身をバランスよく')+'</p></div>';
+
+h+='<div class="stats">';
+h+='<div class="stat"><span class="k">1日の目標カロリー</span><span class="v">'+R.kcal.toLocaleString()+'<small>kcal</small></span><span class="s">消費の目安 '+Math.round(R.tdee).toLocaleString()+'kcal（'+(R.adj>=0?'+':'−')+Math.abs(R.adj)+'）</span></div>';
+h+='<div class="stat"><span class="k">たんぱく質</span><span class="v">'+R.p+'<small>g/日</small></span><span class="s">体重1kgあたり '+(R.p/s.w).toFixed(1)+'g</span></div>';
+h+='<div class="stat"><span class="k">'+R.outcome.k+'</span><span class="v">'+R.outcome.v+'<small>'+R.outcome.u+'</small></span><span class="s">'+R.outcome.s+'</span></div>';
+h+='<div class="stat"><span class="k">BMI</span><span class="v">'+R.bmi.toFixed(1)+'</span><span class="s">'+(R.bmi<18.5?'低体重':R.bmi<25?'普通体重':R.bmi<30?'肥満（1度）':'肥満（2度以上）')+'</span></div>';
+h+='</div>';
+
+if(R.notes.length) h+='<ul class="notes">'+R.notes.map(n=>'<li>'+n+'</li>').join('')+'</ul>';
+
+h+='<section class="panel"><h3>期間の流れ</h3><div class="timeline" role="list">';
+R.ph.forEach(p=>{h+='<button class="week '+p.type+(p.i===selWeek?' sel':'')+'" data-w="'+p.i+'" aria-label="第'+(p.i+1)+'週 '+typeN[p.type]+'" aria-pressed="'+(p.i===selWeek)+'">'+(p.i+1)+'</button>';});
+h+='</div><div class="legend"><span><i style="background:var(--p-blue)"></i>積み上げ週：少しずつ重量・回数を増やす</span><span><i style="background:var(--p-red)"></i>追い込み週：限界近くまで</span><span><i style="background:var(--p-green)"></i>回復週：量を半分に</span><span><i style="background:var(--p-yellow)"></i>測定週：記録を取る</span></div>';
+
+h+='<div class="wk-head"><b>第'+(w.i+1)+'週</b><span class="meta">'+md(addDays(firstDay(s),w.i*7))+'〜'+md(addDays(firstDay(s),w.i*7+6))+'</span><span class="pill '+w.type+'">'+typeN[w.type]+'</span><span class="meta">第'+w.block+'期 ・ 余力 '+rirFor(s,w)+'回で止める（RIR '+rirFor(s,w)+'）・ セット量 '+Math.round(multFor(w)*100)+'%</span></div>';
+h+='<p class="hint" style="margin:-4px 0 10px">重量と回数を入れて丸を押すと、そのセットが記録されて休憩タイマーが始まります。次回の重量は記録から自動で提案されます。種目を長押しすると動きの図が出ます。</p>';
+if(w.type==='test') h+='<p class="hint" style="margin:-4px 0 12px">各日の最初の多関節種目で「その重量で何回できたか」を記録し、第1週と比べてください。</p>';
+h+='<div class="days">';
+days.forEach((d,i)=>{
+h+='<article class="day"><div class="day-h"><span class="dow">'+d.dow+'</span><div><b>'+d.name+' <span style="font-weight:400;color:var(--muted);font-size:12px">'+d.date+'</span></b><small>'+d.groups.map(g=>G[g]).join('・')+'</small></div></div><table class="ex"><tbody>';
+const tot=d.rows.reduce((a,r)=>a+r.sets,0),dn=d.rows.reduce((a,r,j)=>a+Math.min(r.sets,DONE[selWeek+'|'+i+'|'+j+'|'+r.name]||0),0);
+h=h.replace(/<\/b><small>([^<]*)<\/small><\/div><\/div><table class="ex"><tbody>$/,'</b><small>$1</small></div><span class="prog'+(dn>=tot?' all':'')+'" data-tot="'+tot+'">'+dn+'/'+tot+'</span></div><table class="ex"><tbody>');
+d.rows.forEach((r,j)=>{const L=s.lv[r.g],key=selWeek+'|'+i+'|'+j+'|'+r.name,c=Math.min(r.sets,DONE[key]||0),idx=selWeek*10+i,gear=gearOf(r.name,s),[lo,hi]=range(r.r),sg=suggest(r.name,r.g,gear,lo,hi,idx,w.type),me=(LOG[r.name]||[]).find(e=>e.i===idx);h+='<tr class="'+(L===2?'l2 focus':L===1?'focus':'')+(c>=r.sets?' fin':'')+'" data-key="'+key+'" data-ex="'+r.name+'" data-g="'+r.g+'" data-sr="'+r.sets+'×'+r.r+'（休憩 '+r.rest+'）" data-rest="'+restSec(r.rest)+'" data-sets="'+r.sets+'" data-idx="'+idx+'" tabindex="0"><td><span class="g">'+G[r.g]+(L?'<span class="tag l'+L+'">'+(L===2?'バキバキ':'ナチュラル')+'</span>':'')+'</span>'+r.name+'<div class="sets" role="group" aria-label="セットのチェック">'+Array.from({length:r.sets},(_,k)=>'<button type="button" class="sd'+(k<c?' on':'')+'" data-k="'+k+'" aria-pressed="'+(k<c)+'" aria-label="'+(k+1)+'セット目">'+(k<c&&me&&me.sets[k]?me.sets[k]:(k+1))+'</button>').join('')+'<button type="button" class="tbtn" aria-label="'+r.name+'の休憩タイマーを開始">'+CLK+'休憩 '+r.rest+'</button><button type="button" class="cbtn" aria-label="'+r.name+'を声でカウント">▶ 声でカウント</button></div><div class="rec"><label>'+(gear===''?'加重':'重量')+'<span class="stepw"><input type="number" inputmode="decimal" step="'+(gear==='db'||gear===''?1:2.5)+'" min="0" data-start="'+(gear==='bb'?20:gear==='db'?4:gear===''?0:10)+'" class="in-w" value="'+(me&&me.w!==''?me.w:sg.w)+'"'+(gear===''?' placeholder="0"':'')+'>'+STP+'</span>kg</label><label>回数<span class="stepw"><input type="number" inputmode="numeric" min="0" step="1" class="in-r" value="'+sg.reps+'">'+STP+'</span>回</label></div><div class="sug '+sg.cls+'">'+(sg.prev?'<span>'+sg.prev+'</span>':'')+'<b>'+sg.msg+'</b></div></td><td class="sr">'+r.r+(/回|秒/.test(r.r)?'':'回')+'<span class="rest">× '+r.sets+'セット</span></td></tr>';});
+h+='</tbody></table>';
+const ct=cardioText(s,R,w,i); if(ct) h+='<div class="cardio">'+ct+'</div>';
+h+='</article>';
+});
+h+='</div>';
+if(!R.cardio) h+='<p class="hint" style="margin-top:10px">有酸素は回復と心肺のために、週2回・20〜30分のゾーン2（会話できる強度）を休養日に入れるのがおすすめです。</p>';
+h+='</section>';
+
+const F=foodPlan(s,R);
+const cup=x=>'茶碗'+(x%1?x.toFixed(1):x)+'杯<small>（'+Math.round(x*150)+'g）</small>';
+const palm=g=>{const n=Math.round(g/100*2)/2;return '手のひら'+(n%1?n.toFixed(1):n)+'枚分'};
+h+='<section class="panel food"><h3>1日の食べ方</h3><div class="ftags">'+F.tags.map(t=>'<span class="ftag '+t[1]+'">'+t[0]+'</span>').join('')+'</div>';
+h+='<div class="meals">';
+const meal=(t,items)=>'<div class="meal"><span class="mt">'+t+'</span><ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul></div>';
+h+=meal('朝',['ご飯 '+cup(F.m[0]),'卵 2個 ＋ 納豆 1パック','みそ汁・果物など']);
+h+=meal('昼',['ご飯 '+cup(F.m[1]),'<b>鶏むね肉 '+F.per+'g</b><small>（'+palm(F.per)+'）</small>','野菜をひと皿']);
+if(F.snack) h+=meal('間食',['サラダチキン 1個','またはゆで卵 2個 ＋ 牛乳 1杯']);
+if(F.shake) h+=meal('トレ後',['プロテイン 1杯（20g）']);
+h+=meal('夜',['ご飯 '+cup(F.m[2]),'<b>肉か魚 '+F.per+'g</b><small>（'+palm(F.per)+'）</small>','野菜をひと皿']);
+h+='</div>';
+h+='<ol class="rules frules"><li>毎食「肉か魚」「ご飯」「野菜」の3つをそろえる。</li><li>肉は鶏むね・ささみ・豚ヒレ・牛赤身など脂の少ないものを基本に。揚げ物は週'+(s.goal==='cut'?'1':'2〜3')+'回まで。</li><li>'+F.adjust+'</li></ol>';
+h+='<div class="swaps"><div><b>鶏むね100gの代わりなら</b><ul><li>鶏もも（皮なし）120g</li><li>豚ヒレ・豚もも 110g</li><li>牛赤身 110g</li><li>鮭 1切れ半</li><li>サラダチキン 1個</li><li>ツナ缶（水煮）2缶</li><li>卵 4個</li></ul></div>';
+h+='<div><b>ご飯1杯（150g）の代わりなら</b><ul><li>食パン6枚切り 1.5枚</li><li>うどん 1玉</li><li>そば（ゆで）1玉</li><li>パスタ（乾麺）70g</li><li>おにぎり 1.5個</li><li>餅 2個</li><li>バナナ 2本</li></ul></div></div>';
+const pk=R.p*4,fk=R.f*9,ck=R.c*4,tot=pk+fk+ck||1;
+h+='<details class="fdet"><summary>細かい数字を見る</summary><div class="macro"><i style="width:'+(pk/tot*100)+'%;background:var(--p-red)"></i><i style="width:'+(fk/tot*100)+'%;background:var(--p-yellow)"></i><i style="width:'+(ck/tot*100)+'%;background:var(--p-blue)"></i></div>';
+h+='<div class="mlist"><span class="dot" style="background:var(--p-red)"></span><span>たんぱく質</span><span class="n">'+R.p+'g</span><span class="dot" style="background:var(--p-yellow)"></span><span>脂質</span><span class="n">'+R.f+'g</span><span class="dot" style="background:var(--p-blue)"></span><span>炭水化物</span><span class="n">'+R.c+'g</span></div><p class="hint" style="margin-top:8px">上の食べ方は、この数字を身近な食べ物に置き換えたものです。ご飯1杯≒炭水化物55g、鶏むね100g≒たんぱく質22gで計算しています。</p></details>';
+h+='</section>';
+
+h+='<div class="two">';
+h+='<section class="panel"><h3>部位ごとの週セット数</h3><div class="vol">';
+ORDER.forEach(g=>{const v=R.vol[g];h+='<div class="vrow'+(R.fset.has(g)?' f':'')+'"><span class="nm">'+G[g]+'</span><span class="bar"><i style="width:'+(v/maxV*100)+'%"></i></span><span class="n">'+v+'</span></div>';});
+h+='</div><p class="hint" style="margin-top:10px">積み上げ週の最大量です。合計 '+totalSets+'セット／週。重点部位は筋肥大に有効とされる週10〜20セットの範囲で多め、それ以外は維持できる量にしています。</p></section>';
+
+h+='<section class="panel"><h3>体重の量り方</h3><ol class="rules"><li>週1回、同じ曜日の朝・トイレの後に量る。</li><li>1回の増減は気にせず、2週間の流れで見る。</li><li>食事の量を変えるときは、夜のご飯を半杯ずつ動かすだけでよい（肉・魚の量はそのまま）。</li></ol></section>';
+h+='</div>';
+
+h+='<section class="panel"><h3>進め方のルール</h3><ol class="rules">';
+h+='<li>回数の幅（例：6–10）の上限が全セットでできたら、次回は重量を上げる（上半身+1〜2.5kg、下半身+2.5〜5kg）。自重なら回数を増やすか、ゆっくり下ろす。</li>';
+h+='<li>各セットは「あと何回できるか」の余力（RIR）を週ごとの指定どおりに残して止める。フォームが崩れたらそこで終了。</li>';
+h+='<li>回復週はセット数を半分にし、重量は維持。疲れが抜けない、関節が痛む場合は予定より早く回復週を入れる。</li>';
+h+='<li>睡眠は7時間以上を目安に。ナチュラルで筋肉を増やすうえで、食事と同じくらい効きます。</li>';
+h+='<li>'+(s.goal==='str'?'メイン種目は毎回最初に行い、重い1〜2セットの前にウォームアップを3段階入れる。':'重点部位はその日の前半に行い、疲れていない状態で一番重い重量を扱う。')+'</li>';
+h+='</ol></section>';
+
+h+='<p class="foot">数値は一般的な推定式（基礎代謝：Mifflin-St Jeor式）とトレーニング研究の目安から計算した参考値です。持病・けが・服薬がある場合は、始める前に医師に相談してください。痛みが出た種目は中止し、別の種目に置き換えてください。</p>';
+
+out.innerHTML=h;
+out.querySelectorAll('.week').forEach(b=>b.addEventListener('click',()=>{selWeek=+b.dataset.w;render();}));
+bindPress();
+$('mbar-t').textContent=GOALN[s.goal]+' ・ '+s.weeks+'週 ・ 週'+s.days+'日 ・ '+R.kcal.toLocaleString()+'kcal';
+if(rendered){const ph=out.querySelector('.plan-head');ph.classList.add('flash');const st=out.querySelector('.stats');st.classList.add('flash');}
+rendered=true;
+aiUI();
+}
+let rendered=false;
+
+/* ---------- 動きの図 ---------- */
+const ST={H:[100,30],N:[100,44],P:[100,92],E1:[102,68],W1:[104,90],K1:[102,120],A1:[100,148],T1:[112,150]};
+const FR={H:[100,30],N:[100,44],P:[100,92],E1:[110,68],W1:[112,90],E2:[90,68],W2:[88,90],K1:[106,120],A1:[108,148],T1:[114,150],K2:[94,120],A2:[92,148],T2:[86,150]};
+function ps(base,o){const r=Object.assign({},base,o);['E','W','K','A','T'].forEach(k=>{if(!o[k+'2']&&!base[k+'2'])r[k+'2']=r[k+'1'];});return r}
+const BENCH={t:'rect',x:36,y:108,w:104,h:7},BLEG={t:'line',p:[[46,115],[46,150]]},BLEG2={t:'line',p:[[130,115],[130,150]]};
+const LY={H:[42,98],N:[56,102],P:[106,104],K1:[132,98],A1:[142,148],T1:[152,150]};
+const HINGE={P:[84,90],N:[130,70],H:[142,62],K1:[106,118],A1:[100,148],T1:[112,150]};
+const PT={
+squat:{a:ps(ST,{E1:[88,56],W1:[96,44]}),b:ps(ST,{H:[108,62],N:[100,74],P:[78,114],K1:[108,116],A1:[100,148],E1:[86,80],W1:[94,70]}),cue:['足は肩幅、つま先はやや外向き','太ももが床と平行まで、膝とつま先の向きをそろえて下ろす','かかとで床を押して立ち上がる']},
+goblet:{a:ps(ST,{E1:[106,66],W1:[112,56]}),b:ps(ST,{H:[108,62],N:[100,74],P:[78,114],K1:[108,116],E1:[110,96],W1:[118,82]}),cue:['ダンベルを胸の前で縦に持つ','肘を膝の内側に通すイメージで深くしゃがむ','背中を丸めない']},
+squatbw:{a:ps(ST,{E1:[120,46],W1:[142,46]}),b:ps(ST,{H:[108,62],N:[100,74],P:[78,114],K1:[108,116],E1:[122,76],W1:[144,76]}),cue:['3秒かけて下ろし、1秒で立つ','腕を前に伸ばしてバランスを取る','膝が内に入らないように']},
+split:{a:ps(ST,{H:[100,26],N:[100,40],P:[100,88],K1:[118,114],A1:[118,148],T1:[130,150],K2:[84,112],A2:[66,116],T2:[60,118],E1:[102,64],W1:[104,86]}),b:ps(ST,{H:[100,46],N:[100,60],P:[98,108],K1:[126,112],A1:[118,148],T1:[130,150],K2:[90,140],A2:[66,116],T2:[60,118],E1:[102,84],W1:[104,106]}),props:[{t:'rect',x:40,y:118,w:34,h:32}],cue:['後ろ足の甲をベンチに乗せる','前足に体重の8割を乗せて真下に沈む','前の膝はつま先より少し前まで']},
+lunge:{a:ps(ST,{K1:[116,120],A1:[124,148],T1:[136,150],K2:[88,120],A2:[74,146],T2:[70,150]}),b:ps(ST,{H:[100,50],N:[100,64],P:[100,112],K1:[126,114],A1:[124,148],T1:[136,150],K2:[96,142],A2:[72,146],T2:[66,150],E1:[102,88],W1:[104,110]}),cue:['大きく一歩踏み出す','後ろの膝が床すれすれまで沈む','前足のかかとで押して戻る']},
+legpress:{a:ps(ST,{H:[46,64],N:[54,78],P:[90,124],K1:[104,92],A1:[132,100],T1:[136,90],E1:[70,110],W1:[84,124]}),b:ps(ST,{H:[46,64],N:[54,78],P:[90,124],K1:[120,107],A1:[150,90],T1:[154,80],E1:[70,110],W1:[84,124]}),props:[{t:'line',p:[[60,132],[112,132]]},{t:'line',p:[[60,132],[36,76]]},{t:'plate',at:'A1',w:6,h:30}],cue:['腰を背もたれにつけたまま','膝が胸に近づくまで下ろす','伸ばし切っても膝をロックしない']},
+legext:{a:ps(ST,{H:[80,50],N:[80,64],P:[84,108],K1:[112,108],A1:[112,138],T1:[120,142],E1:[88,88],W1:[96,108]}),b:ps(ST,{H:[80,50],N:[80,64],P:[84,108],K1:[112,108],A1:[140,104],T1:[144,96],E1:[88,88],W1:[96,108]}),props:[{t:'rect',x:60,y:110,w:54,h:6},{t:'line',p:[[86,116],[86,150]]},{t:'dot',at:'A1',r:5}],cue:['膝を伸ばし切って1秒止める','ゆっくり戻す','お尻を浮かせない']},
+legcurl:{a:ps(ST,{H:[42,100],N:[56,108],P:[104,108],K1:[132,110],A1:[160,110],T1:[166,104],E1:[44,120],W1:[34,118]}),b:ps(ST,{H:[42,100],N:[56,108],P:[104,108],K1:[132,110],A1:[138,84],T1:[132,78],E1:[44,120],W1:[34,118]}),props:[{t:'rect',x:30,y:116,w:120,h:6},{t:'line',p:[[90,122],[90,150]]},{t:'dot',at:'A1',r:5}],cue:['腰を反らさずお腹をパッドに押しつける','かかとをお尻に引き寄せる','戻す時に2〜3秒かける']},
+nordic:{a:ps(ST,{K1:[100,146],A1:[72,146],T1:[66,150],P:[100,106],N:[100,58],H:[100,44],E1:[110,74],W1:[104,64]}),b:ps(ST,{K1:[100,146],A1:[72,146],T1:[66,150],P:[128,118],N:[162,84],H:[172,74],E1:[176,104],W1:[188,124]}),props:[{t:'dot',at:'A1',r:5}],cue:['足首を固定し、膝から頭まで一直線','もも裏で耐えながら倒れていく','限界で手をついて、押し返して戻る']},
+hinge:{a:ps(ST,{E1:[102,68],W1:[104,92]}),b:ps(ST,Object.assign({},HINGE,{E1:[130,94],W1:[130,116]})),cue:['膝は軽く曲げたまま固定','お尻を後ろに引き、背中はまっすぐ','もも裏が伸びたら戻る']},
+slrdl:{a:ps(ST,{}),b:ps(ST,Object.assign({},HINGE,{E1:[130,94],W1:[130,116],K2:[62,84],A2:[38,80],T2:[34,72]})),cue:['片脚立ちで、後ろ脚と上体を一直線に','骨盤を床と平行に保つ','支えている脚のお尻で立ち上がる']},
+backext:{a:ps(ST,{A1:[160,120],T1:[168,126],K1:[142,104],P:[124,88],N:[112,134],H:[110,148],E1:[120,120],W1:[114,110]}),b:ps(ST,{A1:[160,120],T1:[168,126],K1:[142,104],P:[124,88],N:[88,60],H:[78,52],E1:[100,78],W1:[94,66]}),props:[{t:'rect',x:116,y:92,w:20,h:8},{t:'line',p:[[126,100],[126,150]]},{t:'line',p:[[162,128],[162,150]]}],cue:['腰の位置をパッドの少し下に','背中を丸めず、お尻で体を持ち上げる','反りすぎず一直線で止める']},
+thrust:{a:ps(ST,{N:[66,106],H:[56,100],P:[96,138],K1:[128,112],A1:[136,148],T1:[148,150],E1:[80,132],W1:[96,138]}),b:ps(ST,{N:[66,104],H:[56,98],P:[100,106],K1:[134,102],A1:[136,148],T1:[148,150],E1:[84,118],W1:[100,106]}),props:[{t:'rect',x:30,y:108,w:40,h:42}],cue:['肩甲骨の下をベンチに乗せる','お尻を締めて、肩から膝まで一直線に','あごを引いて腰を反らさない']},
+bridge:{a:ps(ST,{H:[40,140],N:[54,142],P:[96,146],K1:[122,118],A1:[132,148],T1:[144,150],E1:[74,148],W1:[94,148]}),b:ps(ST,{H:[40,140],N:[54,142],P:[100,122],K1:[126,112],A1:[132,148],T1:[144,150],E1:[74,148],W1:[94,148]}),cue:['かかとで床を押す','お尻を締めて持ち上げ1秒止める','腰ではなくお尻で上げる']},
+slbridge:{a:ps(ST,{H:[40,140],N:[54,142],P:[96,146],K1:[122,118],A1:[132,148],T1:[144,150],K2:[122,130],A2:[148,124],T2:[154,118],E1:[74,148],W1:[94,148]}),b:ps(ST,{H:[40,140],N:[54,142],P:[100,122],K1:[126,112],A1:[132,148],T1:[144,150],K2:[124,112],A2:[150,102],T2:[156,96],E1:[74,148],W1:[94,148]}),cue:['片脚を伸ばしたまま','床についた脚のかかとで押し上げる','骨盤が傾かないように']},
+calf:{a:ps(ST,{}),b:ps(ST,{H:[100,22],N:[100,36],P:[100,84],E1:[102,60],W1:[104,82],K1:[102,112],A1:[100,138],T1:[112,150]}),cue:['かかとを下ろし切ってふくらはぎを伸ばす','つま先立ちで1秒止める','反動を使わない']},
+bench:{a:ps(ST,Object.assign({},LY,{E1:[58,78],W1:[58,56]})),b:ps(ST,Object.assign({},LY,{E1:[66,108],W1:[62,84]})),props:[BENCH,BLEG,BLEG2],cue:['肩甲骨を寄せて胸を張る','みぞおちあたりに下ろす','足で床を踏んで押し上げる']},
+incline:{a:ps(ST,{H:[54,62],N:[62,74],P:[100,110],K1:[128,108],A1:[138,148],T1:[150,150],E1:[70,50],W1:[70,28]}),b:ps(ST,{H:[54,62],N:[62,74],P:[100,110],K1:[128,108],A1:[138,148],T1:[150,150],E1:[48,90],W1:[62,66]}),props:[{t:'line',p:[[46,64],[94,114]]},{t:'line',p:[[94,114],[130,114]]},{t:'line',p:[[100,114],[100,150]]}],cue:['ベンチ角度は30度前後','鎖骨の下あたりに下ろす','肘は体から45度ほど開く']},
+fly:{a:ps(FR,{E1:[124,52],W1:[146,58],E2:[76,52],W2:[54,58]}),b:ps(FR,{E1:[118,60],W1:[104,66],E2:[82,60],W2:[96,66]}),props:[{t:'cable',a:[190,14],to:'W1',g:'cb'},{t:'cable',a:[10,14],to:'W2',g:'cb'}],cue:['肘を軽く曲げたまま固定','大きな円を描いて腕を閉じる','胸が伸びるところまで開く']},
+reverse:{a:ps(FR,{E1:[118,60],W1:[104,66],E2:[82,60],W2:[96,66]}),b:ps(FR,{E1:[124,52],W1:[146,58],E2:[76,52],W2:[54,58]}),cue:['肩の後ろで引く意識','肩をすくめない','開いた位置で1秒止める']},
+pushup:{a:ps(ST,{H:[150,96],N:[138,104],P:[90,116],K1:[62,126],A1:[34,140],T1:[30,150],E1:[138,128],W1:[138,150]}),b:ps(ST,{H:[152,128],N:[138,134],P:[90,138],K1:[62,142],A1:[34,144],T1:[30,150],E1:[118,136],W1:[138,150]}),cue:['頭からかかとまで一直線','胸が床すれすれまで下ろす','肘は体から45度']},
+pushfe:{a:ps(ST,{H:[152,100],N:[138,108],P:[90,112],K1:[62,118],A1:[36,124],T1:[30,128],E1:[138,130],W1:[138,150]}),b:ps(ST,{H:[154,130],N:[138,136],P:[90,130],K1:[62,126],A1:[36,124],T1:[30,128],E1:[118,138],W1:[138,150]}),props:[{t:'rect',x:14,y:128,w:36,h:22}],cue:['足を台に乗せると胸の上部に効く','体を一直線に保つ','腰が落ちないように']},
+dips:{a:ps(ST,{W1:[110,80],E1:[108,60],N:[104,38],H:[106,24],P:[100,86],K1:[100,112],A1:[82,124],T1:[78,130]}),b:ps(ST,{N:[98,60],H:[104,46],P:[92,106],K1:[96,132],A1:[76,140],T1:[72,146],E1:[84,72],W1:[110,80]}),props:[{t:'line',p:[[96,80],[132,80]]},{t:'line',p:[[126,80],[126,150]]}],cue:['少し前傾すると胸、まっすぐだと腕に効く','肩が耳に近づかない深さまで','肘を伸ばし切って戻る']},
+benchdip:{a:ps(ST,{W1:[90,104],E1:[90,82],N:[96,60],H:[100,46],P:[104,108],K1:[132,112],A1:[150,148],T1:[160,150]}),b:ps(ST,{N:[100,84],H:[104,70],P:[104,132],E1:[76,94],W1:[90,104],K1:[134,124],A1:[150,148],T1:[160,150]}),props:[{t:'rect',x:60,y:104,w:34,h:46}],cue:['お尻を台のすぐ前に','肘を後ろに曲げて90度まで','手のひらで押して戻る']},
+ohp:{a:ps(ST,{E1:[102,62],W1:[106,44]}),b:ps(ST,{E1:[104,22],W1:[102,0]}),cue:['お腹とお尻に力を入れて腰を反らさない','頭の真上まで押し上げる','顔の前を通すように下ろす']},
+pike:{a:ps(ST,{P:[92,82],N:[124,116],H:[130,128],E1:[128,134],W1:[132,150],K1:[72,116],A1:[52,148],T1:[48,150]}),b:ps(ST,{P:[90,90],N:[118,130],H:[124,142],E1:[112,134],W1:[132,150],K1:[70,120],A1:[52,148],T1:[48,150]}),cue:['お尻を高く上げて「へ」の字に','頭を手の前に下ろす','肩で押し返す']},
+lateral:{a:ps(FR,{}),b:ps(FR,{E1:[124,48],W1:[146,50],E2:[76,48],W2:[54,50]}),props:[{t:'cable',a:[10,148],to:'W1',g:'cb'}],cue:['肘を軽く曲げ、肘から上げる','肩の高さまで','肩をすくめない、反動を使わない']},
+prone:{a:ps(ST,{H:[150,136],N:[136,142],P:[88,144],K1:[60,146],A1:[32,146],T1:[28,150],E1:[160,146],W1:[182,146]}),b:ps(ST,{H:[150,128],N:[136,136],P:[88,144],K1:[60,146],A1:[32,146],T1:[28,150],E1:[160,132],W1:[182,124]}),cue:['うつ伏せで腕をY字・T字に伸ばす','親指を上に向けて腕を浮かせる','肩甲骨を寄せて2秒止める']},
+pullup:{a:ps(ST,{W1:[104,0],E1:[104,22],N:[100,44],H:[102,30],P:[100,90],K1:[104,116],A1:[92,138],T1:[98,142]}),b:ps(ST,{H:[110,-8],N:[102,6],P:[98,52],K1:[102,78],A1:[90,100],T1:[96,104],E1:[118,22],W1:[104,0]}),props:[{t:'line',p:[[60,0],[150,0]]}],cue:['肩幅より少し広く握る','胸をバーに近づけるように引く','肘を下に引き下ろす意識']},
+row:{a:ps(ST,Object.assign({},HINGE,{E1:[130,94],W1:[130,116]})),b:ps(ST,Object.assign({},HINGE,{E1:[104,62],W1:[118,86]})),cue:['上体を45度ほど前傾','おへそに向かって引く','肩甲骨を寄せて1秒止める']},
+seatrow:{a:ps(ST,{P:[70,118],N:[90,72],H:[96,58],K1:[100,100],A1:[130,112],T1:[134,104],E1:[110,86],W1:[132,92]}),b:ps(ST,{P:[70,118],N:[74,72],H:[78,58],K1:[100,100],A1:[130,112],T1:[134,104],E1:[58,90],W1:[86,96]}),props:[{t:'rect',x:40,y:120,w:50,h:8},{t:'cable',a:[196,96],to:'W1',g:'cb'}],cue:['胸を張ったまま','お腹に向かって引く','上体を後ろに倒しすぎない']},
+invrow:{a:ps(ST,{W1:[140,80],E1:[138,100],N:[134,122],H:[146,118],P:[90,132],K1:[60,140],A1:[32,146],T1:[30,150]}),b:ps(ST,{N:[132,90],H:[146,84],P:[88,116],K1:[60,132],A1:[32,146],T1:[30,150],E1:[116,90],W1:[140,80]}),props:[{t:'line',p:[[110,80],[180,80]]},{t:'line',p:[[176,80],[176,150]]}],cue:['かかとを床につけ体を一直線に','胸をバー（机の縁）に近づける','肩甲骨を寄せる']},
+sapd:{a:ps(ST,{N:[106,46],H:[110,32],P:[98,92],E1:[124,34],W1:[140,24]}),b:ps(ST,{N:[106,46],H:[110,32],P:[98,92],E1:[110,70],W1:[112,94]}),props:[{t:'cable',a:[196,0],to:'W1',g:'cb'}],cue:['肘を伸ばしたまま','腕を太ももまで振り下ろす','背中の広がりを感じる']},
+pullover:{a:ps(ST,Object.assign({},LY,{E1:[58,78],W1:[58,56]})),b:ps(ST,Object.assign({},LY,{E1:[34,94],W1:[14,96]})),props:[BENCH,BLEG,BLEG2],cue:['肘を軽く曲げて固定','頭の後ろへ大きく下ろす','胸の上まで戻す']},
+curl:{a:ps(ST,{E1:[100,68],W1:[106,90]}),b:ps(ST,{E1:[100,68],W1:[114,50]}),cue:['肘を体の横で固定','反動を使わず巻き上げる','下ろす時もゆっくり']},
+pushdown:{a:ps(ST,{E1:[100,68],W1:[118,56]}),b:ps(ST,{E1:[100,68],W1:[106,90]}),props:[{t:'cable',a:[124,-20],to:'W1',g:'cb'}],cue:['肘を脇につけて固定','腕を伸ばし切って1秒','戻す時に肘が前に出ない']},
+ohext:{a:ps(ST,{E1:[104,16],W1:[100,-6]}),b:ps(ST,{E1:[104,16],W1:[86,32]}),cue:['肘を天井に向けて固定','頭の後ろへ下ろす','腕を伸ばし切る']},
+kickback:{a:ps(ST,Object.assign({},HINGE,{E1:[104,80],W1:[110,100]})),b:ps(ST,Object.assign({},HINGE,{E1:[104,80],W1:[82,88]})),cue:['上腕を体と平行に固定','肘から先だけを後ろへ伸ばす','伸ばし切って1秒止める']},
+hlr:{a:ps(ST,{W1:[104,0],E1:[104,22],N:[100,44],H:[102,30],P:[100,90],K1:[100,116],A1:[100,142],T1:[106,146]}),b:ps(ST,{W1:[104,0],E1:[104,22],N:[98,44],H:[100,30],P:[96,90],K1:[122,80],A1:[148,76],T1:[154,70]}),props:[{t:'line',p:[[60,0],[150,0]]}],cue:['体を揺らさない','骨盤を丸めるように脚を上げる','ゆっくり下ろす']},
+cablecrunch:{a:ps(ST,{K1:[102,146],A1:[74,146],T1:[68,150],P:[100,102],N:[104,56],H:[110,44],E1:[118,56],W1:[110,40]}),b:ps(ST,{K1:[102,146],A1:[74,146],T1:[68,150],P:[100,104],N:[130,90],H:[140,100],E1:[140,110],W1:[142,94]}),props:[{t:'cable',a:[112,-20],to:'W1',g:'cb'}],cue:['ひざ立ちでロープを頭の横に','おへそをのぞき込むように丸める','腰は動かさない']},
+pallof:{a:ps(ST,{E1:[102,74],W1:[112,68]}),b:ps(ST,{E1:[122,66],W1:[144,64]}),cue:['ケーブルを体の横に','胸の前から真っすぐ押し出す','体がひねられないよう耐える']},
+roller:{a:ps(ST,{K1:[90,148],A1:[62,146],T1:[56,150],P:[92,104],N:[118,64],H:[128,52],E1:[122,102],W1:[124,140]}),b:ps(ST,{K1:[90,148],A1:[62,146],T1:[56,150],P:[120,128],N:[160,118],H:[172,112],E1:[180,126],W1:[192,140]}),props:[{t:'wheel',at:'W1'}],cue:['ひざ立ちから前に転がす','腰が反る手前で止める','お腹の力で引き戻す']},
+plank:{a:ps(ST,{E1:[138,150],W1:[156,150],N:[136,124],H:[150,118],P:[88,128],K1:[60,136],A1:[34,142],T1:[30,150]}),b:ps(ST,{E1:[138,150],W1:[156,150],N:[136,124],H:[150,118],P:[88,126],K1:[60,135],A1:[34,142],T1:[30,150]}),cue:['頭からかかとまで一直線','お尻を上げすぎない・落とさない','呼吸を止めない']},
+deadbug:{a:ps(ST,{H:[40,138],N:[54,140],P:[100,142],K1:[100,112],A1:[128,112],T1:[134,108],E1:[56,118],W1:[58,96]}),b:ps(ST,{H:[40,138],N:[54,140],P:[100,142],K1:[128,132],A1:[156,136],T1:[162,132],E1:[56,118],W1:[58,96],K2:[100,112],A2:[128,112],T2:[134,108],E2:[34,128],W2:[14,128]}),cue:['腰を床に押しつけたまま','反対の手と脚をゆっくり伸ばす','左右交互に']},
+sidebend:{a:ps(FR,{}),b:ps(FR,{N:[110,46],H:[114,32],E1:[120,72],W1:[124,96],E2:[100,70],W2:[96,92]}),cue:['真横に倒す','前かがみにならない','反対側のわき腹で起き上がる']},
+twist:{a:ps(ST,{P:[100,140],N:[78,98],H:[72,86],K1:[124,118],A1:[150,124],T1:[156,120],E1:[96,112],W1:[114,108]}),b:ps(ST,{P:[100,140],N:[78,98],H:[72,86],K1:[124,118],A1:[150,124],T1:[156,120],E1:[90,120],W1:[96,136]}),cue:['上体を少し後ろに倒し足を浮かせる','胸ごと左右にひねる','ゆっくり交互に']},
+legraise:{a:ps(ST,{H:[40,138],N:[54,140],P:[100,142],K1:[128,140],A1:[156,140],T1:[162,134],E1:[78,146],W1:[98,148]}),b:ps(ST,{H:[40,138],N:[54,140],P:[100,142],K1:[118,114],A1:[136,88],T1:[144,86],E1:[78,146],W1:[98,148]}),cue:['腰を床から浮かせない','脚を伸ばしたまま上げる','床につく直前で止める']}
+};
+const FIG={
+'ベンチプレス':['bench','bb'],'インクライン・ダンベルプレス':['incline','db'],'ケーブルフライ':['fly','cb'],'ディップス':['dips',''],'マシン・チェストプレス':['bench','mc'],'ペックデック':['fly','mc'],
+'ダンベルプレス':['bench','db'],'ダンベルフライ':['fly','db'],'プッシュアップ（加重可）':['pushup',''],'プッシュアップ':['pushup',''],'足上げプッシュアップ':['pushfe',''],'椅子ディップス':['benchdip',''],'3秒ネガティブ・プッシュアップ':['pushup',''],
+'懸垂 / ラットプルダウン':['pullup',''],'バーベルロウ':['row','bb'],'シーテッド・ケーブルロウ':['seatrow','cb'],'ストレートアーム・プルダウン':['sapd','cb'],'ワンハンド・ダンベルロウ':['row','db'],'チェストサポート・ロウ':['row','db'],
+'ダンベル・ベントオーバーロウ':['row','db'],'ダンベル・プルオーバー':['pullover','db'],'懸垂（ドアバー）':['pullup',''],'懸垂 / 斜め懸垂':['pullup',''],'テーブル・インバーテッドロウ':['invrow',''],'タオルロウ（柱などに掛けて）':['invrow',''],'プローン・Y-Tレイズ':['prone',''],
+'オーバーヘッドプレス':['ohp','bb'],'サイドレイズ':['lateral','db'],'リアデルト・フライ':['reverse','mc'],'マシン・ショルダープレス':['ohp','mc'],'ケーブル・サイドレイズ':['lateral','cb'],
+'ダンベル・ショルダープレス':['ohp','db'],'リアレイズ':['reverse','db'],'アーノルドプレス':['ohp','db'],'パイク・プッシュアップ':['pike',''],'壁倒立ホールド / プッシュアップ':['pike',''],'プローン・Y-T-Wレイズ':['prone',''],
+'EZバーカール':['curl','bb'],'ケーブル・プレスダウン':['pushdown','cb'],'インクライン・ダンベルカール':['curl','db'],'オーバーヘッド・ケーブルエクステンション':['ohext','cb'],'ハンマーカール':['curl','db'],'ナローベンチプレス':['bench','bb'],
+'ダンベルカール':['curl','db'],'フレンチプレス':['ohext','db'],'キックバック':['kickback','db'],'チンアップ（逆手懸垂）':['pullup',''],'ダイヤモンド・プッシュアップ':['pushup',''],'タオルカール':['curl',''],'ベンチディップス':['benchdip',''],
+'バックスクワット':['squat','bb'],'レッグプレス':['legpress','mc'],'ブルガリアン・スクワット':['split','db'],'レッグエクステンション':['legext','mc'],'ハックスクワット':['squat','mc'],
+'ゴブレット・スクワット':['goblet','db'],'ダンベル・ランジ':['lunge','db'],'ステップアップ':['lunge','db'],'スクワット（ゆっくり下ろす）':['squatbw',''],'ジャンプスクワット':['squatbw',''],'シシースクワット':['squatbw',''],
+'ルーマニアン・デッドリフト':['hinge','bb'],'ヒップスラスト':['thrust','bb'],'ライイング・レッグカール':['legcurl','mc'],'45°バックエクステンション':['backext',''],'シーテッド・レッグカール':['legcurl','mc'],
+'ダンベル・ルーマニアンDL':['hinge','db'],'ダンベル・ヒップスラスト':['thrust','db'],'シングルレッグRDL':['slrdl','db'],'グルートブリッジ':['bridge',''],'片脚ヒップリフト':['slbridge',''],'ノルディック・ハムカール':['nordic',''],'スライディング・レッグカール':['bridge',''],'片脚ルーマニアンDL':['slrdl',''],
+'スタンディング・カーフレイズ':['calf','mc'],'シーテッド・カーフレイズ':['calf','mc'],'ダンベル・カーフレイズ（段差）':['calf','db'],'片脚カーフレイズ':['calf',''],'片脚カーフレイズ（段差）':['calf',''],'両脚カーフレイズ（3秒キープ）':['calf',''],
+'ハンギング・レッグレイズ':['hlr',''],'ケーブルクランチ':['cablecrunch','cb'],'パロフプレス':['pallof','cb'],'アブローラー':['roller',''],'アブローラー / デッドバグ':['roller',''],'ダンベル・サイドベント':['sidebend','db'],'ロシアンツイスト':['twist',''],
+'プランク':['plank',''],'デッドバグ':['deadbug',''],'サイドプランク':['plank',''],'レッグレイズ':['legraise','']
+};
+const NAMES={bb:'バーベル',db:'ダンベル',cb:'ケーブル',mc:'マシン','':'自重'};
+function lerp(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]}
+function figSVG(key,gear,t){
+const pt=PT[key],q={};
+for(const k in pt.a) q[k]=lerp(pt.a[k],pt.b[k]||pt.a[k],t);
+const L=(a,b,c,w)=>'<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="'+c+'" stroke-width="'+w+'" stroke-linecap="round"/>';
+let s='<line x1="0" y1="152" x2="200" y2="152" stroke="var(--line)" stroke-width="2"/>';
+(pt.props||[]).forEach(p=>{
+if(p.g&&p.g!==gear) return;
+if(p.t==='rect') s+='<rect x="'+p.x+'" y="'+p.y+'" width="'+p.w+'" height="'+p.h+'" rx="2" fill="var(--line)"/>';
+if(p.t==='line') s+=L(p.p[0],p.p[1],'var(--muted)',4);
+if(p.t==='cable') s+='<line x1="'+p.a[0]+'" y1="'+p.a[1]+'" x2="'+q[p.to][0]+'" y2="'+q[p.to][1]+'" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/><circle cx="'+p.a[0]+'" cy="'+p.a[1]+'" r="4" fill="var(--muted)"/>';
+if(p.t==='dot') s+='<circle cx="'+q[p.at][0]+'" cy="'+q[p.at][1]+'" r="'+p.r+'" fill="var(--line)"/>';
+if(p.t==='plate') s+='<rect x="'+(q[p.at][0]+2)+'" y="'+(q[p.at][1]-p.h/2)+'" width="'+p.w+'" height="'+p.h+'" rx="2" fill="var(--muted)"/>';
+if(p.t==='wheel') s+='<circle cx="'+q[p.at][0]+'" cy="'+(q[p.at][1]+2)+'" r="9" fill="none" stroke="var(--accent)" stroke-width="4"/>';
+});
+const back='var(--muted)',ink='var(--ink)';
+s+=L(q.N,q.E2,back,5)+L(q.E2,q.W2,back,5)+L(q.P,q.K2,back,6)+L(q.K2,q.A2,back,6)+L(q.A2,q.T2,back,5);
+s+=L(q.N,q.P,ink,7)+L(q.P,q.K1,ink,6)+L(q.K1,q.A1,ink,6)+L(q.A1,q.T1,ink,5)+L(q.N,q.E1,ink,5)+L(q.E1,q.W1,ink,5);
+s+='<circle cx="'+q.H[0]+'" cy="'+q.H[1]+'" r="9" fill="'+ink+'"/>';
+const front=key==='fly'||key==='reverse'||key==='lateral'||key==='sidebend';
+if(gear==='bb') s+='<circle cx="'+q.W1[0]+'" cy="'+q.W1[1]+'" r="10" fill="var(--accent)" opacity=".9"/><circle cx="'+q.W1[0]+'" cy="'+q.W1[1]+'" r="3" fill="var(--surface)"/>';
+if(gear==='db'){s+='<rect x="'+(q.W1[0]-6)+'" y="'+(q.W1[1]-4)+'" width="12" height="8" rx="3" fill="var(--accent)"/>';if(front)s+='<rect x="'+(q.W2[0]-6)+'" y="'+(q.W2[1]-4)+'" width="12" height="8" rx="3" fill="var(--accent)"/>';}
+if(gear==='cb'||gear==='mc') s+='<circle cx="'+q.W1[0]+'" cy="'+q.W1[1]+'" r="4" fill="var(--accent)"/>';
+return s;
+}
+const sheet=document.createElement('div');
+sheet.className='sheet';sheet.hidden=true;
+sheet.innerHTML='<div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="sh-t"><div class="sheet-h"><div><small id="sh-g"></small><b id="sh-t"></b></div><button class="sheet-x" id="sh-x" aria-label="閉じる">×</button></div><svg class="fig" id="sh-fig" viewBox="0 -24 200 184" role="img"></svg><div class="sr2" id="sh-sr"></div><ul id="sh-cue"></ul><button type="button" class="sh-tm" id="sh-tm"></button></div>';
+document.body.appendChild(sheet);
+let anim=0;
+function openSheet(tr){
+const name=tr.dataset.ex,s=read();let f=FIG[name]||['pushup',''];
+let gear=f[1];if(s.eq==='bw')gear='';else if(s.eq==='db'&&gear)gear='db';
+$('sh-t').textContent=name;$('sh-g').textContent=G[tr.dataset.g]+' ・ '+NAMES[gear];
+$('sh-sr').textContent=tr.dataset.sr;sheetRow=tr;$('sh-tm').innerHTML=CLK+'休憩タイマー開始（'+fmt(+tr.dataset.rest)+'）';
+$('sh-cue').innerHTML=PT[f[0]].cue.map(c=>'<li>'+c+'</li>').join('');
+$('sh-fig').setAttribute('aria-label',name+'の動き');
+sheet.hidden=false;
+const svg=$('sh-fig'),reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+cancelAnimationFrame(anim);
+if(reduce){svg.innerHTML='<g opacity=".35">'+figSVG(f[0],gear,0)+'</g>'+figSVG(f[0],gear,1);return}
+const t0=performance.now();
+(function loop(now){const c=((now-t0)/2400)%1;let t=c<.1?0:c<.5?(c-.1)/.4:c<.6?1:1-(c-.6)/.4;t=(1-Math.cos(Math.PI*t))/2;svg.innerHTML=figSVG(f[0],gear,t);anim=requestAnimationFrame(loop)})(t0);
+$('sh-x').focus();
+}
+let sheetRow=null;
+const STP='<span class="stp"><button type="button" class="up" aria-label="増やす">▲</button><button type="button" class="dn" aria-label="減らす">▼</button></span>';
+document.querySelectorAll('.num input').forEach(i=>i.insertAdjacentHTML('afterend',STP));
+if($('weight'))$('weight').step='0.5';
+document.addEventListener('click',e=>{
+const b=e.target.closest('.stp button');if(!b)return;
+const inp=b.parentNode.previousElementSibling,st=parseFloat(inp.step)||1;
+let v=parseFloat(inp.value);
+if(isNaN(v)){if(b.classList.contains('up')&&+inp.dataset.start>0){inp.value=inp.dataset.start;inp.dispatchEvent(new Event('input',{bubbles:true}));return}v=0}
+v=b.classList.contains('up')?v+st:v-st;
+const mn=inp.min!==''?+inp.min:-Infinity,mx=inp.max!==''?+inp.max:Infinity;
+inp.value=+Math.min(mx,Math.max(mn,v)).toFixed(2);
+inp.dispatchEvent(new Event('input',{bubbles:true}));
+});
+const CLK='<svg class="clk" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 6v3.2l2 1.3M6 1.5h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+function restSec(t){const m=String(t).match(/(\d+)(?:〜(\d+))?(分|秒)/);if(!m)return 60;const a=+m[1],b=m[2]?+m[2]:a;return Math.round((a+b)/2*(m[3]==='分'?60:1)/15)*15}
+function fmt(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+/* ---------- 休憩タイマー（全画面） ---------- */
+const tm=document.createElement('div');tm.className='restv';tm.hidden=true;tm.setAttribute('role','timer');
+tm.innerHTML='<div class="rest-fill" id="tm-fill"></div><div class="rest-in"><span id="tm-name"></span><span id="tm-set"></span><b id="tm-t">0:00</b><span id="tm-sub">休憩中</span><span class="ai-n" id="tm-ai"></span><div class="tm-btns"><button type="button" id="tm-m">−15秒</button><button type="button" id="tm-p">+15秒</button><button type="button" id="tm-r">もう一度</button><button type="button" id="tm-x">閉じる</button></div></div>';
+document.body.appendChild(tm);
+let tEnd=0,tTot=0,tInt=0,tSec=60,lastV=-1,wl=null,tName='',tSets=3;const setN={};
+function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+function startTimer(sec,name,sets,count){
+tSec=sec;tName=name;tSets=sets||3;
+let n;
+if(typeof count==='number')n=count;else{if(count!==false)setN[name]=(setN[name]||0)+1;n=((setN[name]||1)-1)%tSets+1;}
+$('tm-name').textContent=name;$('tm-set').textContent=n+'/'+tSets+'セット目のあと';
+tTot=sec;tEnd=Date.now()+sec*1000;lastV=-1;tm.hidden=false;tm.classList.remove('done');
+try{if(navigator.wakeLock&&!wl)navigator.wakeLock.request('screen').then(l=>{wl=l}).catch(()=>{})}catch(e){}
+aiAuto();ensureAudio();beep(660,.12);say(L('restStart',name,sec));vib(80);clearInterval(tInt);tick();tInt=setInterval(tick,100);
+}
+function tick(){
+const ms=tEnd-Date.now(),left=Math.max(0,Math.ceil(ms/1000));
+const pr=tTot?Math.min(1,Math.max(0,1-ms/(tTot*1000))):1;
+const f=$('tm-fill');f.style.height=(pr*100)+'%';f.style.background='hsl('+Math.round(220-75*pr)+' '+Math.round(60+5*pr)+'% '+Math.round(38+4*pr)+'%)';
+if(left>0){
+$('tm-t').textContent=fmt(left);
+$('tm-sub').textContent=left<=10?'もうすぐ次のセット':'休憩中';
+if(left!==lastV&&(left===10||left<=3)){lastV=left;vib(left===10?150:70);if(left===10)say(L('rest10',tName));else beep(660,.1)}
+return;
+}
+clearInterval(tInt);tm.classList.add('done');$('tm-t').textContent='次のセットへ';$('tm-sub').textContent='画面をタップして閉じる';
+vib([400,150,400,150,700]);beep(880,.3);setTimeout(()=>beep(1100,.4),380);say(L('restEnd',tName));
+}
+function stopTimer(){clearInterval(tInt);tm.hidden=true;try{wl&&wl.release()}catch(e){}wl=null}
+$('tm-m').addEventListener('click',()=>{tEnd-=15000;tick()});
+$('tm-p').addEventListener('click',()=>{tEnd+=15000;tTot+=15;tick()});
+$('tm-r').addEventListener('click',()=>startTimer(tSec,tName,tSets,false));
+$('tm-x').addEventListener('click',stopTimer);
+tm.addEventListener('click',e=>{if(tm.classList.contains('done')&&!e.target.closest('button'))stopTimer()});
+document.addEventListener('click',e=>{const b=e.target.closest('.tbtn');if(!b)return;const tr=b.closest('tr');startTimer(+tr.dataset.rest,tr.dataset.ex,+tr.dataset.sets)});
+document.addEventListener('click',e=>{if(e.target.closest('#sh-tm')&&sheetRow){const tr=sheetRow;closeSheet();startTimer(+tr.dataset.rest,tr.dataset.ex,+tr.dataset.sets)}});
+const LKEY='training-plan-log-v1';let LOG={};try{LOG=JSON.parse(localStorage.getItem(LKEY)||'{}')||{}}catch(e){}
+function saveLog(){try{localStorage.setItem(LKEY,JSON.stringify(LOG))}catch(e){}}
+function gearOf(name,s){const f=FIG[name]||['',''];let g=f[1];if(s.eq==='bw')g='';else if(s.eq==='db'&&g)g='db';return g}
+function range(r){const m=String(r).match(/(\d+)\D+(\d+)/);return m?[+m[1],+m[2]]:[8,12]}
+function suggest(name,grp,gear,lo,hi,idx,wt){
+const hist=(LOG[name]||[]).filter(e=>e.i<idx&&e.sets&&e.sets.some(x=>x>0)).sort((a,b)=>b.i-a.i);
+const lower=['quads','glutes','calves'].includes(grp);
+const inc=gear==='db'?(lower?2:1):gear===''?0:(lower?5:2.5),step=inc||2.5;
+if(!hist.length) return {w:'',reps:hi,prev:'',msg:'初回：軽めで試して「あと2〜3回できる」重さに決める',cls:'new'};
+const e=hist[0],reps=e.sets.filter(x=>x>0),w=+e.w||0,all=reps.every(x=>x>=hi),mx=Math.max(...reps);
+const prev='前回 '+(w?w+'kg':gear===''?'自重':'重量なし')+' × '+reps.join('・')+'回';
+if(wt==='deload') return {w:w||'',reps:lo,prev,msg:'回復週：重さはそのまま、楽に終える',cls:'keep'};
+if(all){
+if(inc&&w) return {w:+(w+inc).toFixed(1),reps:lo,prev,msg:'全セット上限クリア → '+inc+'kg上げる'+(gear==='db'?'（片手）':''),cls:'up'};
+return {w:w||'',reps:Math.min(hi+3,reps[0]+1),prev,msg:'上限クリア → 回数を1回増やすか、3秒かけて下ろす',cls:'up'};
+}
+if(mx<lo&&w) return {w:Math.max(0,+(Math.round(w*.9/step)*step).toFixed(1)),reps:lo,prev,msg:'下限に届かず → 約1割軽くする',cls:'down'};
+return {w:w||'',reps:Math.min(hi,reps[0]+1),prev,msg:'同じ重さで、各セット1回ずつ増やす',cls:'keep'};
+}
+const DKEY='training-plan-done-v1';let DONE={};try{DONE=JSON.parse(localStorage.getItem(DKEY)||'{}')||{}}catch(e){}
+document.addEventListener('click',e=>{
+const b=e.target.closest('.sd');if(!b)return;
+const tr=b.closest('tr'),k=+b.dataset.k,sets=+tr.dataset.sets,key=tr.dataset.key;
+const cur=Math.min(sets,DONE[key]||0),next=k<cur?k:k+1;
+if(next)DONE[key]=next;else delete DONE[key];
+try{localStorage.setItem(DKEY,JSON.stringify(DONE))}catch(err){}
+const nm=tr.dataset.ex,ix=+tr.dataset.idx,wv=tr.querySelector('.in-w').value,rp=+tr.querySelector('.in-r').value||0;
+const arr=LOG[nm]||(LOG[nm]=[]);let le=arr.find(x=>x.i===ix);
+if(!le){le={i:ix,w:'',sets:[],d:new Date().toISOString().slice(0,10)};arr.push(le)}
+if(next>cur){for(let q=cur;q<next;q++)le.sets[q]=rp;le.w=wv;}else le.sets.length=next;
+if(!le.sets.length)arr.splice(arr.indexOf(le),1);
+if(!arr.length)delete LOG[nm];
+saveLog();
+tr.querySelectorAll('.sd').forEach((x,i)=>{x.classList.toggle('on',i<next);x.setAttribute('aria-pressed',i<next);x.textContent=i<next&&le.sets[i]?le.sets[i]:(i+1)});
+tr.classList.toggle('fin',next>=sets);
+const day=tr.closest('.day'),pg=day.querySelector('.prog');let dn=0;
+day.querySelectorAll('tr[data-key]').forEach(r=>dn+=r.querySelectorAll('.sd.on').length);
+pg.textContent=dn+'/'+pg.dataset.tot;pg.classList.toggle('all',dn>=+pg.dataset.tot);
+if(next>cur){
+if(next<sets)startTimer(+tr.dataset.rest,tr.dataset.ex,sets,next);
+else{stopTimer();vib(200);say(L('allDone',tr.dataset.ex));}
+}
+});
+/* ---------- 音と声 ---------- */
+let ac=null,VO=null;
+const SL=['甘い','やさしい','ふつう','きびしめ','ドS'];
+const LK=['start','half','two','last','done','early','restStart','rest10','restEnd','allDone'];
+// 1行＝10フレーズを「|」区切りで（順番は LK と同じ）
+function LN(s){const a=s.split('|');if(a.length!==LK.length)throw new Error('LINES: '+s.slice(0,20));return Object.fromEntries(LK.map((k,i)=>[k,a[i]]))}
+// 口調5段階を並べる。文字列1つ＝男女共通、[女性,男性]＝男女別 → LINES[方言][性別][段階]
+function LV(...lv){const f=[],m=[];lv.forEach(x=>{const a=Array.isArray(x)?x:[x,x];const F=LN(a[0]),M=a[1]===a[0]?F:LN(a[1]);f.push(F);m.push(M)});return {f,m}}
+const STD3='スタート|半分|あと2回|ラスト一回|セット完了|セット終了|休憩、{t}|あと10秒|次のセット|この種目、完了';
+const LINES={
+std:LV(
+['ちゃんと見てるからね。はい、スタート|半分だよ。すごく上手|あと2回。いっしょに数えるね|ラスト一回。だいじょうぶ、できるよ|できたね。えらい、えらい|ここまでがんばれたね。それで十分だよ|おつかれさま。{t}、ゆっくり休もうね|あと10秒。深呼吸しよ|そろそろいこっか。いっしょにがんばろ|この種目おしまい。ほんとによくがんばったね',
+'大丈夫、ついてる。スタート|半分。いいぞ、その調子|あと2回。いっしょにいこう|ラスト一回。信じてるぞ|よくやった。誇っていい|ここまでで十分だ。よくがんばった|おつかれ。{t}、ゆっくり休め|あと10秒。深呼吸だ|そろそろいこうか。いっしょにな|この種目は終わりだ。本当によくやった'],
+['準備いい？スタート|半分きたよ、いい調子|あと2回、がんばって|ラスト一回、ていねいにね|ナイス！おつかれさま|おつかれさま。次はもう少しいけるかも|おつかれさま。{t}休憩しよう|あと10秒だよ|はい、次のセットいこう|この種目おわり。いい感じだったよ',
+'準備いいか？スタート|半分だ、いい調子|あと2回、がんばれ|ラスト一回、ていねいにな|ナイス。おつかれ|おつかれ。次はもう少しいけるさ|おつかれ。{t}休憩だ|あと10秒だ|よし、次のセットいこう|この種目は終わり。いい感じだったぞ'],
+STD3,
+['集中。スタート|半分。フォーム崩さない|あと2回。ここから|ラスト一回。出し切って|よし。それでいい|目標まで届いてない。次は取りにいこう|休憩{t}。ちゃんと呼吸を整えて|あと10秒。構えて|時間。次|完了。次の種目も同じ集中で',
+'集中しろ。スタート|半分。フォームを崩すな|あと2回。ここからだ|ラスト一回。出し切れ|よし。それでいい|目標に届いてない。次は取りにいけ|休憩{t}。呼吸を整えろ|あと10秒。構えろ|時間だ。次|完了。次の種目も同じ集中でいけ'],
+['ほら、始めるよ。スタート|まだ半分。もう顔がきついけど？|あと2回。ここで止めたら笑うよ|ラスト一回。根性見せなさい|ふーん、やればできるじゃない|え、もう終わり？その程度？|休憩は{t}だけ。甘えないで|あと10秒。休みすぎ|はい、休憩終わり。立って|許してあげる。次',
+'ほら、始めるぞ。スタート|まだ半分だ。もうきついのか？|あと2回。ここで止めたら笑うぞ|ラスト一回。根性見せろ|ふん、やればできるじゃないか|もう終わりか？その程度か|休憩は{t}だけだ。甘えるな|あと10秒。休みすぎだ|休憩終わりだ。立て|許してやる。次だ']),
+kan:LV(
+['ちゃんと見てるからな。ほな、スタート|半分やで。めっちゃ上手|あと2回。いっしょに数えたる|ラスト一回。だいじょうぶ、いけるって|できたやん。えらいえらい|ここまでがんばれたな。それで十分や|おつかれさん。{t}、ゆっくり休も|あと10秒。深呼吸しよ|そろそろいこか。いっしょにがんばろ|この種目おしまい。ほんまよう頑張ったな',
+'大丈夫、ついたるから。スタート|半分や。ええぞ、その調子|あと2回。いっしょにいこか|ラスト一回。信じてるで|ようやった。胸張ってええ|ここまでで十分や。ようがんばった|おつかれ。{t}、ゆっくり休みや|あと10秒。深呼吸や|そろそろいこか。いっしょにな|この種目は終わりや。ほんまようやった'],
+'準備ええ？スタート|半分きたで、ええ調子|あと2回、がんばりや|ラスト一回、ていねいにな|ナイス！おつかれさん|おつかれさん。次はもうちょいいけるかも|おつかれさん。{t}休憩しよ|あと10秒やで|ほな、次のセットいこ|この種目おわり。ええ感じやったで',
+'ほな、スタート|半分や|あと2回|ラスト一回|セット完了や|セット終了|休憩、{t}|あと10秒|次のセットや|この種目、完了や',
+'集中しいや。スタート|半分。フォーム崩さんとき|あと2回。ここからや|ラスト一回。出し切りや|よっしゃ。それでええ|目標まで届いてへん。次は取りにいき|休憩{t}。ちゃんと息整えとき|あと10秒。構えとき|時間や。次|完了。次の種目も同じ集中でな',
+['ほら、始めるで。スタート|まだ半分やで。もうしんどい顔してるけど？|あと2回。ここで止めたら笑うで|ラスト一回。根性見せてみ|ふーん、やればできるやん|え、もう終わり？そんなもん？|休憩は{t}だけ。甘えんといて|あと10秒。休みすぎ|はい、休憩終わり。立ち|許したるわ。次',
+'ほら、始めるぞ。スタート|まだ半分や。もうしんどいんか？|あと2回。ここで止めたら笑うぞ|ラスト一回。根性見せんかい|ふん、やればできるやんけ|もう終わりか？そんなもんか|休憩は{t}だけや。甘えんな|あと10秒。休みすぎや|休憩終わりや。立て|許したる。次や']),
+ngy:LV(
+['ちゃんと見とるでね。はい、スタート|半分だよ。すごい上手だがね|あと2回。いっしょに数えたげる|ラスト一回。だいじょうぶ、できるって|できたがね。えらいえらい|ここまでがんばれたね。それで十分だわ|おつかれさま。{t}、ゆっくり休もまい|あと10秒。深呼吸しよ|そろそろいこか。いっしょにがんばろまい|この種目おしまい。ほんとよう頑張ったね',
+'大丈夫、ついとるで。スタート|半分だ。ええぞ、その調子|あと2回。いっしょにいこまい|ラスト一回。信じとるでよ|ようやった。胸張ってええ|ここまでで十分だ。ようがんばった|おつかれ。{t}、ゆっくり休みゃあ|あと10秒。深呼吸だ|そろそろいこか。いっしょにな|この種目は終わりだ。ほんとようやった'],
+'準備ええ？スタート|半分きたがね、ええ調子|あと2回、がんばりゃあ|ラスト一回、ていねいにね|ナイス！おつかれさん|おつかれさん。次はもうちょっといけるかもね|おつかれさん。{t}休憩しよまい|あと10秒だよ|ほんなら、次のセットいこ|この種目おわり。ええ感じだったがね',
+'ほんなら、スタート|半分だがね|あと2回|ラスト一回|セット完了|セット終了|休憩、{t}|あと10秒|次のセットだがね|この種目、完了',
+'集中しやあ。スタート|半分。フォーム崩さんように|あと2回。ここからだ|ラスト一回。出し切りゃあ|よし。それでええ|目標まで届いとらん。次は取りにいきゃあ|休憩{t}。ちゃんと息整えときゃあ|あと10秒。構えときゃあ|時間だ。次|完了。次の種目も同じ集中でな',
+['ほら、始めるでよ。スタート|まだ半分だがね。もうえらい顔しとるけど？|あと2回。ここで止めたら笑うでよ|ラスト一回。根性見せやあ|ふーん、やればできるがね|え、もう終わり？そんなもんかね？|休憩は{t}だけ。甘えたらかんよ|あと10秒。休みすぎだがね|はい、休憩終わり。立ちゃあ|許したるわ。次',
+'ほら、始めるぞ。スタート|まだ半分だ。もうえらいんか？|あと2回。ここで止めたら笑うぞ|ラスト一回。根性見せんか|ふん、やればできるがや|もう終わりか？そんなもんか|休憩は{t}だけだ。甘えるな|あと10秒。休みすぎだ|休憩終わりだ。立て|許したる。次だ']),
+hkt:LV(
+['ちゃんと見とるけんね。はい、スタート|半分よ。すごく上手やね|あと2回。いっしょに数えてあげる|ラスト一回。だいじょうぶ、できるよ|できたやん。えらいえらい|ここまでがんばれたね。それで十分よ|おつかれさま。{t}、ゆっくり休もうね|あと10秒。深呼吸しよ|そろそろいこっか。いっしょにがんばろ|この種目おしまい。ほんとよう頑張ったね',
+'大丈夫、ついとるけん。スタート|半分たい。よかぞ、その調子|あと2回。いっしょにいこう|ラスト一回。信じとるけんな|ようやった。胸張ってよか|ここまでで十分たい。ようがんばった|おつかれ。{t}、ゆっくり休め|あと10秒。深呼吸たい|そろそろいこうか。いっしょにな|この種目は終わりたい。ほんとようやった'],
+'準備よか？スタート|半分きたよ、よか調子|あと2回、がんばりー|ラスト一回、ていねいにね|ナイス！おつかれさん|おつかれさん。次はもうちょっといけるかもよ|おつかれさん。{t}休憩しよう|あと10秒よ|そしたら、次のセットいこう|この種目おわり。よか感じやったよ',
+'そしたら、スタート|半分たい|あと2回|ラスト一回|セット完了|セット終了|休憩、{t}|あと10秒|次のセットたい|この種目、完了',
+'集中しとって。スタート|半分。フォーム崩さんごと|あと2回。ここからたい|ラスト一回。出し切りー|よし。それでよか|目標まで届いとらん。次は取りにいきー|休憩{t}。ちゃんと息整えとって|あと10秒。構えとって|時間たい。次|完了。次の種目も同じ集中でね',
+['ほら、始めるけん。スタート|まだ半分よ。もうきつか顔しとるけど？|あと2回。ここで止めたら笑うばい|ラスト一回。根性見せんしゃい|ふーん、やればできるやん|え、もう終わり？そげなもん？|休憩は{t}だけ。甘えんどって|あと10秒。休みすぎたい|はい、休憩終わり。立ちー|許しちゃる。次',
+'ほら、始めるぞ。スタート|まだ半分たい。もうきついとか？|あと2回。ここで止めたら笑うぞ|ラスト一回。根性見せんか|ふん、やればできるやんか|もう終わりか？そげなもんか|休憩は{t}だけたい。甘えんな|あと10秒。休みすぎたい|休憩終わりたい。立て|許しちゃる。次たい']),
+// 外国人風：「英語のひとこと>カタコトの日本語」（英語の声がなければ日本語だけ）
+gai:LV(
+'Okay,>ワタシ、ミテルヨ。スタート|ハンブン。トテモ ジョウズ|アト ニカイ。イッショニ カゾエル|Come on,>ラスト イッカイ。ダイジョウブ、デキル|Beautiful!>デキタネ。エライ！|ココマデ、ジュウブン。ヨク ガンバッタ|Okay,>キュウケイ {t}。ユックリ ヤスンデ|アト ジュウビョウ。シンコキュウ|Ready?>ツギ、イコウ。イッショニ|Wonderful!>コノ シュモク、オワリ。ホントニ ヨク ガンバッタ',
+'Okay!>スタート|ハンブン！イイ チョウシ|アト ニカイ。ガンバッテ|Last one!>ラスト イッカイ|Nice!>オツカレサマ|オツカレサマ。ツギ、モット イケル|キュウケイ、{t}|アト ジュウビョウ|Let\'s go!>ツギノ セット|Good job!>コノ シュモク、オワリ',
+'スタート|ハンブン|アト ニカイ|ラスト イッカイ|セット カンリョウ|セット シュウリョウ|キュウケイ、{t}|アト ジュウビョウ|ツギノ セット|コノ シュモク、カンリョウ',
+'Focus.>スタート|ハンブン。フォーム、キープ|アト ニカイ。ココカラ|Push!>ラスト イッカイ。ゼンブ ダス|オーケー。ソレデ イイ|モクヒョウ、トドイテナイ。ツギ、トル|キュウケイ {t}。コキュウ、トトノエル|アト ジュウビョウ。ジュンビ|Time.>ツギ|カンリョウ。ツギモ オナジ シュウチュウ',
+'Come on,>ハジメルヨ。スタート|マダ ハンブン。モウ ゲンカイ？|アト ニカイ。ヤメタラ ワラウヨ|Last one!>コンジョウ、ミセテ|Hmm.>ヤレバ デキル ジャナイ|What?>モウ オワリ？ソノ テイド？|キュウケイ、{t}ダケ。アマエナイ|アト ジュウビョウ。ヤスミスギ|Up!>キュウケイ オワリ。タッテ|ユルシテ アゲル。ツギ')
+};
+// 声の質：PRE[性別][口調] = [高さ, 速さ]
+const PRE={f:[[1.12,.92],[1.08,.98],[1,1],[.96,1.05],[.92,1.08]],m:[[.96,.90],[.98,.96],[.95,1],[.90,1.05],[.86,1.08]]};
+function dia(){const el=document.querySelector('input[name="dia"]:checked');return el?el.value:'std'}
+function lvl(){return Math.max(0,Math.min(4,Math.round(+$('sdo').value)||0))}
+const EN1=['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'],EN10=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function enNum(n){n=Math.round(+n);if(n<0||n>99)return String(n);if(n<20)return EN1[n];const u=n%10;return EN10[Math.floor(n/10)]+(u?'-'+EN1[u]:'')}
+const KD=['','イチ','ニ','サン','ヨン','ゴ','ロク','ナナ','ハチ','キュウ'];
+function kNum(n){if(n<10)return KD[n]||'ゼロ';const t=Math.floor(n/10),u=n%10;return (t>1?KD[t]:'')+'ジュウ'+KD[u]}
+function kataT(s){s=Math.round(+s);const m=Math.floor(s/60),x=s%60;if(m>5||s<=0)return spk(s);
+const mm=['','イップン','ニフン','サンプン','ヨンプン','ゴフン'][m];return [mm,x?kNum(x)+'ビョウ':''].filter(Boolean).join(' ')}
+function NUM(n){return dia()==='gai'&&enVoice()?{en:enNum(n)}:String(n)}
+function TT(s){return dia()==='gai'?kataT(s):spk(s)}
+function CD(c){return dia()==='gai'&&enVoice()?{en:['one','two','three'][c-1]}:['いち','に','さん'][c-1]}
+function enVoice(){try{const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));if(!vs.length)return null;const g=gen();
+const f=vs.filter(v=>/samantha|karen|victoria|moira|tessa|zira|aria|jenny|female|google us english|google uk english female/i.test(v.name)),m=vs.filter(v=>/daniel|alex|fred|david|guy|male|google uk english male/i.test(v.name.replace(/female/i,'')));
+return (g==='m'?m[0]:f[0])||vs[0]}catch(e){return null}}
+// 日本語の声の性別：名前とvoiceURIで判定（Androidの ja-jp-x-jab/jad は女性、jac は男性）。判定できない声は 'o'
+const FRX=/kyoko|o-ren|haruka|nanami|ayumi|sayaka|mizuki|female|女性|(?:^|[-_\s.])ja[bd](?:[-_\s.]|$)/i,MRX=/otoya|ichiro|keita|daichi|hattori|takumi|male|男性|(?:^|[-_\s.])jac(?:[-_\s.]|$)/i;
+const HQRX=/enhanced|premium|拡張|プレミアム|network|neural|siri/i;
+function vStr(v){return ((v&&v.name)||'')+' '+((v&&v.voiceURI)||'')}
+function vGen(v){if(!v)return 'o';const s=vStr(v),f=FRX.test(s),m=MRX.test(s.replace(/female/ig,''));return f&&!m?'f':m&&!f?'m':'o'}
+function isMaleV(v){return vGen(v)==='m'}
+function isHQ(v){return HQRX.test(vStr(v))}
+// 高音質の度合い：プレミアム＞拡張・ニューラル＞ネットワーク・Siri＞その他（Androidの -local は最後）
+function vQ(v){const s=vStr(v);return /premium|プレミアム/i.test(s)?3:/enhanced|拡張|neural/i.test(s)?2:/network|siri/i.test(s)?1:/-local\b/i.test(s)?-1:0}
+function vKey(v){return (v&&(v.voiceURI||v.name))||''}
+function vLabel(v){const m=String(v.voiceURI||'').match(/x-(ja[a-z])-(network|local)/i);return v.name+(m&&!v.name.includes(m[1])?' '+m[1]+'-'+m[2]:'')}
+function jaList(){try{return (speechSynthesis.getVoices()||[]).filter(v=>/^ja/i.test(v.lang||''))}catch(e){return []}}
+function bestOf(a){return a.slice().sort((x,y)=>vQ(y)-vQ(x))[0]||null}
+function gen(){const el=document.querySelector('input[name="vg"]:checked');return el?el.value:'f'}
+let pendingVoice='';
+// フレーズ：方言・性別・口調に応じた文字列（外国人風で英語の声があれば {en,ja}）。t＝秒数で {t} を置換
+function P(k,t){const d=dia(),T=LINES[d]||LINES.std,x=T[gen()][lvl()][k],rep=s=>t==null?s:s.replace('{t}',TT(t));
+if(d!=='gai')return rep(x);
+const i=x.indexOf('>'),en=i>=0?x.slice(0,i):'',ja=rep(i>=0?x.slice(i+1):x);
+return en&&enVoice()?{en,ja}:ja}
+const MALE_NOTE='この端末に日本語の男性の声が入っていないため、声を低くして読み上げます。';
+const FEMALE_NOTE='この端末に日本語の女性の声が入っていないため、声を高くして読み上げます。';
+const EMPTY_NOTE='声の一覧を取得できない画面です。SafariやChromeで開くと声を選べます。';
+let vBoot=true; // 起動直後は一覧が遅れて届くことがあるので「読み込み中」と表示
+const escA=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function voiceNote(){const vs=jaList(),g=gen();
+if(!vs.length)return vBoot?'声の一覧を読み込み中…':EMPTY_NOTE+(g==='m'?'（男性は標準の声を低くして読み上げます）':'');
+const nf=vs.filter(v=>vGen(v)==='f').length,nm=vs.filter(v=>vGen(v)==='m').length;
+if(g==='m'&&!nm)return MALE_NOTE;
+if(g==='f'&&nm===vs.length)return FEMALE_NOTE;
+if(vs.length===1)return 'この端末で使える日本語の声は1種類だけです。「声の高さ」「話す速さ」で調整できます。';
+return '日本語の声が'+vs.length+'種類あります（女性'+nf+'・男性'+nm+'）。選んで「試しに聞く」で確認できます。'}
+function hqStatus(){const vs=jaList(),h=vs.filter(isHQ);
+$('hq-status').textContent='高音質の日本語音声：'+(!vs.length?'声の一覧を取得できません':h.length?'見つかりました（'+[...new Set(h.map(vLabel))].join('、')+'）':'見つかりません')}
+// 声の選択肢を作り直す（一覧が空でも「おまかせ（性別）」は必ず更新）
+function fillVoices(){try{
+const vs=jaList(),sel=$('vsel'),cur=sel.value||pendingVoice,g=gen();
+const grp={f:[],m:[],o:[]};vs.forEach(v=>grp[vGen(v)].push(v));
+const opt=v=>'<option value="'+escA(vKey(v))+'">'+escA(vLabel(v))+(isHQ(v)?'【高音質】':'')+'</option>';
+const sec=(k,lab,always)=>{const a=grp[k].slice().sort((x,y)=>vQ(y)-vQ(x));return a.length?'<optgroup label="'+lab+'" data-g="'+k+'">'+a.map(opt).join('')+'</optgroup>':always?'<optgroup label="'+lab+'" data-g="'+k+'"><option disabled>この端末に入っていません</option></optgroup>':''};
+sel.innerHTML='<option value="">おまかせ（'+(g==='m'?'男性':'女性')+'）</option>'+(vs.length?sec('f','女性の声',1)+sec('m','男性の声',1)+sec('o','その他の日本語の声'):'');
+const hit=cur&&vs.find(v=>vKey(v)===cur||v.name===cur);
+sel.value=hit?vKey(hit):'';if(hit)pendingVoice='';
+$('vnote').textContent=voiceNote();hqStatus();
+}catch(e){}}
+function ensureAudio(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume()}catch(e){}}
+function beep(f,d){try{if(!ac||read().voice!=='on')return;const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+// おまかせの声：性別 → 高音質 → 先頭。その性別の声がなければ性別不明→反対の性別の順（高さで補正）。一覧が空なら null＝端末の標準の声
+function pickVoice(){try{const vs=jaList(),g=gen(),by=k=>vs.filter(v=>vGen(v)===k);
+VO=bestOf(by(g))||bestOf(by('o'))||bestOf(vs);VO_FAKE=!!vs.length&&!by(g).length;
+}catch(e){VO=null}}
+let VO_FAKE=false;
+try{pickVoice();fillVoices();speechSynthesis.addEventListener('voiceschanged',()=>{pickVoice();fillVoices()})}catch(e){}
+setTimeout(()=>{vBoot=false;try{pickVoice();fillVoices()}catch(e){}},1500);
+function jaVoice(){try{const k=$('vsel').value,c=k&&jaList().find(v=>vKey(v)===k||v.name===k);return c||VO||null}catch(e){return VO}}
+function offv(id){const x=+$(id).value;return isFinite(x)&&Math.abs(x)<=0.2001?x:0}
+// 高さ・速さ＝性別×口調のプリセット＋微調整。男性指定で男性以外の声（標準の声＝女性とみなす）なら低く、女性指定で男性の声なら高くする
+function vparm(kind,v){const g=gen(),p=PRE[g][lvl()];let pitch=p[0]+offv('vpitch'),rate=p[1]+offv('vrate');
+if(kind==='ja'){if(dia()==='gai')rate*=0.95;if(g==='m'&&!isMaleV(v))pitch*=0.85;else if(g==='f'&&isMaleV(v))pitch*=1.15}
+const c=x=>Math.round(Math.min(2,Math.max(.5,x))*1000)/1000;return {pitch:c(pitch),rate:c(rate)}}
+// t：文字列／{en,ja}／それらの配列。英語→英語の声、日本語→日本語の声で順に読む
+function say(t,cut){if(read().voice!=='on')return;try{
+const ev=dia()==='gai'?enVoice():null,segs=[];
+const add=(v,s)=>{if(!s)return;const L=segs[segs.length-1];if(L&&L.v===v)L.t+=v==='en'?(/[.,!?]$/.test(L.t)?' ':', ')+s:'、'+s;else segs.push({v,t:s})};
+(Array.isArray(t)?t:[t]).forEach(p=>{if(p==null)return;if(typeof p!=='object'){add('ja',String(p));return}if(p.en&&ev)add('en',p.en);if(p.ja)add('ja',p.ja)});
+if(cut)speechSynthesis.cancel();
+segs.forEach(sg=>{const u=new SpeechSynthesisUtterance(sg.t);let v;if(sg.v==='en'){v=ev;u.lang=ev.lang}else{u.lang='ja-JP';v=jaVoice()}
+if(v)u.voice=v;const q=vparm(sg.v,v);u.pitch=q.pitch;u.rate=q.rate;speechSynthesis.speak(u)});
+}catch(e){}}
+function spk(s){const m=Math.floor(s/60),x=s%60;return (m?m+'分':'')+(x?x+'秒':'')}
+/* ---------- 声でカウント ---------- */
+const cv=document.createElement('div');cv.className='restv cntv';cv.hidden=true;cv.setAttribute('role','dialog');cv.setAttribute('aria-label','回数カウント');
+cv.innerHTML='<div class="rest-fill" id="cv-fill"></div><div class="rest-in"><span id="cv-name"></span><span id="cv-set"></span><b id="cv-n">3</b><span id="cv-ph"></span><span id="cv-goal"></span><span class="ai-n" id="cv-ai"></span><div class="tm-btns"><button type="button" id="cv-done">ここで終了して記録</button><button type="button" id="cv-x">やめる</button></div></div>';
+document.body.appendChild(cv);
+let cTm=0,cRow=null,cN=0,cGoal=10,cRaf=0,cPh0=0,cPhLen=1,cOn=false;
+function cFill(){if(!cOn)return;const fr=Math.min(1,(performance.now()-cPh0)/cPhLen);$('cv-fill').style.height=Math.min(100,(cN+fr)/cGoal*100)+'%';cRaf=requestAnimationFrame(cFill)}
+function startCount(tr){
+ensureAudio();stopTimer();clearTimeout(cTm);cancelAnimationFrame(cRaf);aiAuto();
+const sets=+tr.dataset.sets,done=tr.querySelectorAll('.sd.on').length;
+if(done>=sets){say('この種目は、全セット終わっています',true);return}
+cRow=tr;cGoal=Math.max(1,+tr.querySelector('.in-r').value||10);cN=0;cOn=false;
+$('cv-name').textContent=tr.dataset.ex;$('cv-set').textContent=(done+1)+'/'+sets+'セット目';$('cv-goal').textContent='目標 '+cGoal+'回';
+$('cv-fill').style.height='0%';cv.hidden=false;
+try{if(navigator.wakeLock&&!wl)navigator.wakeLock.request('screen').then(l=>{wl=l}).catch(()=>{})}catch(e){}
+let c=3;$('cv-n').textContent=c;$('cv-ph').textContent='用意';say(CD(3),true);beep(520,.08);
+const cd=()=>{c--;if(c>0){$('cv-n').textContent=c;say(CD(c),true);beep(520,.08);cTm=setTimeout(cd,1000)}
+else{$('cv-n').textContent='0';say(L('start',tr.dataset.ex),true);beep(880,.15);cOn=true;cFill();rep_()}};
+cTm=setTimeout(cd,1000);
+}
+function rep_(){
+const T=(read().tempo||3)*1000;
+$('cv-ph').textContent='下ろす';cPh0=performance.now();cPhLen=T;
+cTm=setTimeout(()=>{$('cv-ph').textContent='上げる';
+cTm=setTimeout(()=>{
+cN++;$('cv-n').textContent=cN;
+if(cN>=cGoal){finishCount(cN);return}
+const left=cGoal-cN,xn=cRow&&cRow.dataset.ex;
+if(left===1)say([NUM(cN),L('last',xn)],true);
+else if(left===2&&cGoal>=5)say([NUM(cN),L('two',xn)],true);
+else if(cN*2===cGoal&&cGoal>=8)say([NUM(cN),L('half',xn)],true);
+else say(NUM(cN),true);
+rep_();
+},T*.4);
+},T*.6);
+}
+function finishCount(n,record){
+clearTimeout(cTm);cOn=false;cancelAnimationFrame(cRaf);cv.hidden=true;
+if(record===false){speechSynthesis&&speechSynthesis.cancel();return}
+say(L(n>=cGoal?'done':'early',cRow&&cRow.dataset.ex),true);
+if(!cRow||n<=0)return;
+const tr=cRow;tr.querySelector('.in-r').value=n;
+const d=tr.querySelectorAll('.sd')[tr.querySelectorAll('.sd.on').length];
+if(d)d.click();
+}
+$('cv-done').addEventListener('click',()=>finishCount(cN));
+$('cv-x').addEventListener('click',()=>finishCount(cN,false));
+document.addEventListener('click',e=>{const b=e.target.closest('.cbtn');if(b)startCount(b.closest('tr'))});
+function offLbl(x){x=Math.round(+x*100)/100;return !x?'自動':(x>0?'+':'−')+Math.abs(x).toFixed(2)}
+function vvLabel(){$('vpitch-v').textContent=offLbl(offv('vpitch'));$('vrate-v').textContent=offLbl(offv('vrate'))}
+function sample(){ensureAudio();say(L('start'),true);say(L('last'))}
+['vpitch','vrate'].forEach(id=>{$(id).addEventListener('input',vvLabel);$(id).addEventListener('change',()=>{ensureAudio();say(L('last'),true)})});
+document.querySelectorAll('input[name="dia"]').forEach(r=>r.addEventListener('change',sample));
+function sdoLabel(){$('sdo-l').textContent=SL[lvl()];$('sdo-l').dataset.l=lvl()}
+$('sdo').addEventListener('input',sdoLabel);
+$('sdo').addEventListener('change',()=>{sdoLabel();ensureAudio();say(L('last'),true)});
+$('vtry').addEventListener('click',()=>{ensureAudio();if(read().voice!=='on'){$('vnote').textContent='「声と音のガイド」がオフになっています。';return}const xn=aiHave()?aiCtx().names[0]:undefined;if(aiMode()&&!aiHave())aiNote('未作成のため、定型のセリフで再生しています');say(L('start',xn),true);say([NUM(8),L('two',xn)]);say([NUM(9),L('last',xn)]);say(L('done',xn));say(L('restStart',xn,60))});
+// トレーナーの性別を変えたら「おまかせ」に戻し、その性別で声を選び直して試し読み
+document.querySelectorAll('input[name="vg"]').forEach(r=>r.addEventListener('change',()=>{$('vsel').value='';pendingVoice='';vBoot=false;pickVoice();fillVoices();sample()}));
+// 女性／男性の欄から声を選んだら、トレーナーの性別もそちらに合わせる
+$('vsel').addEventListener('change',()=>{const o=$('vsel').selectedOptions[0],pg=o&&o.parentNode&&o.parentNode.tagName==='OPTGROUP'?o.parentNode.dataset.g:'';
+if((pg==='f'||pg==='m')&&pg!==gen()){const r=$('vg-'+pg);if(r)r.checked=true}
+vBoot=false;pickVoice();fillVoices();sample()});
+$('hq-reload').addEventListener('click',()=>{$('hq-status').textContent='確認中…';vBoot=false;setTimeout(()=>{pickVoice();fillVoices()},300)});
+(function(){const ua=navigator.userAgent||'',ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1),and=/Android/.test(ua);
+if(ios)$('hq-and').hidden=true;else if(and)$('hq-ios').hidden=true})();
+function closeSheet(){sheet.hidden=true;cancelAnimationFrame(anim)}
+sheet.addEventListener('click',e=>{if(e.target===sheet)closeSheet()});
+$('sh-x').addEventListener('click',closeSheet);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!sheet.hidden)closeSheet()});
+function bindPress(){
+out.querySelectorAll('tr[data-ex]').forEach(tr=>{
+let tm=0,x0=0,y0=0;
+const cancel=()=>{clearTimeout(tm);tr.classList.remove('pressing')};
+tr.addEventListener('pointerdown',e=>{if(e.target.closest('.tbtn,.cbtn,.sd,.rec'))return;x0=e.clientX;y0=e.clientY;tr.classList.add('pressing');tm=setTimeout(()=>{tr.classList.remove('pressing');openSheet(tr)},450)});
+tr.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-x0)+Math.abs(e.clientY-y0)>10)cancel()});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>tr.addEventListener(ev,cancel));
+tr.addEventListener('contextmenu',e=>e.preventDefault());
+tr.addEventListener('keydown',e=>{if(e.target!==tr)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();openSheet(tr)}});
+});
+}
+
+/* ---------- セリフ：AIが作る（1日1回まとめて生成） ---------- */
+const AKEY='training-plan-ailines-v1';let AIC=null;try{AIC=JSON.parse(localStorage.getItem(AKEY)||'null')}catch(e){}
+let SAMPP=null,aiOff='',aiBusy=null,aiErr=null,aiFailKey='';const aiLast={};
+function aiMode(){const el=document.querySelector('input[name="lines"]:checked');return !aiOff&&!!el&&el.value==='ai'}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function hsh(t){let h=5381;for(let i=0;i<t.length;i++)h=(h*33+t.charCodeAt(i))>>>0;return h.toString(36)}
+// 今日のトレーニング日（選択中の週に今日がなければその週の1日目）とキャッシュキー
+function aiCtx(){
+const s=read(),R=compute(s),wk=Math.min(selWeek,s.weeks-1),w=R.ph[wk],days=buildWeek(s,R,w);
+const t0=new Date();t0.setHours(0,0,0,0);const f0=firstDay(s);
+let di=days.findIndex((d,i)=>addDays(f0,w.i*7+OFF[s.days][i]).getTime()===t0.getTime());if(di<0)di=0;
+const d=days[di],names=d.rows.map(r=>r.name);
+return {s,d,rows:d.rows,names,key:[ymd(t0),gen(),lvl(),dia(),wk,di,hsh(names.join('/'))].join('|')}}
+function aiHave(){return aiMode()&&!!AIC&&!!AIC.data&&AIC.key===aiCtx().key}
+// 読み上げ用に整える：全角数字→半角、記号・絵文字を除く（{t} は残す）
+function aiClean(x){if(typeof x!=='string')return '';
+x=x.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\{t\}/g,'\u0001')
+.replace(/[\p{Extended_Pictographic}‍️]/gu,'').replace(/[「」『』【】（）()［］\[\]{}<>＜＞〈〉《》"'“”‘’*＊#＃~〜_＿|｜\\/／・♪♡♥☆★→←…]/g,'')
+.replace(/\u0001/g,'{t}').replace(/\s+/g,' ').trim();
+return x.length>40?'':x}
+function aiValid(o,names){
+if(!o||typeof o!=='object'||!o.generic||typeof o.generic!=='object')return null;
+const arr=a=>(Array.isArray(a)?a:[a]).map(aiClean).filter(Boolean);const g={};let miss=0;
+LK.forEach(k=>{let a=arr(o.generic[k]);if(k==='restStart')a=a.filter(x=>x.includes('{t}'));if(a.length)g[k]=a;else miss++});
+if(miss>3)return null; // 足りないキーだけは定型で補う
+const ex={};if(o.ex&&typeof o.ex==='object')names.forEach(n=>{const e=o.ex[n];if(!e||typeof e!=='object')return;const r={};['start','last','done'].forEach(k=>{const v=aiClean(e[k]);if(v&&!v.includes('{t}'))r[k]=v});if(Object.keys(r).length)ex[n]=r});
+return {generic:g,ex}}
+// AIのセリフ（なければ null）。start/last/done は種目別を半分くらいの確率で使う。前回と同じ言い回しは避ける
+function AIP(k,exName,t){
+if(!aiHave())return null;const D=AIC.data,G=D.generic[k],E=exName&&D.ex&&D.ex[exName];let s=null;
+if(E&&E[k]&&E[k]!==aiLast[k]&&Math.random()<.5)s=E[k];
+if(!s){if(!G||!G.length)return null;const c=G.length>1?G.filter(x=>x!==aiLast[k]):G;s=(c.length?c:G)[Math.floor(Math.random()*(c.length||G.length))]}
+aiLast[k]=s;return s.replace('{t}',t==null?'':TT(t))}
+function L(k,exName,t){const a=AIP(k,exName,t);return a!=null?a:P(k,t)}
+function aiPrompt(c){
+const s=c.s,LVD=['甘い：恋人のように寄り添って励ます','やさしい：温かく励ます','ふつう：短く事務的','きびしめ：厳しいコーチ','ドS：挑発して追い込む。ただし人格否定や暴言はしない'];
+const DD={std:'標準語',kan:'関西弁',ngy:'名古屋弁',hkt:'博多弁',gai:'外国人風：片言の日本語をカタカナ中心で、単語の間に半角スペース'};
+const menu=c.rows.map(r=>'- '+r.name+' '+r.sets+'セット×'+r.r+(/回|秒/.test(r.r)?'':'回')).join('\n');
+const prev=c.names.map(n=>{const h=(LOG[n]||[]).filter(e=>e.sets&&e.sets.some(x=>x>0)).sort((a,b)=>b.i-a.i)[0];if(!h)return '';const rp=h.sets.filter(x=>x>0);return '- '+n+'：'+(+h.w?h.w+'kg':gearOf(n,s)===''?'自重':'重量未記録')+'×'+rp.join('・')+'回'}).filter(Boolean);
+return 'あなたは筋トレの声かけトレーナーです。音声で読み上げるセリフを作ってください。\n'+
+'トレーナーの性別：'+(gen()==='m'?'男性':'女性')+'\n口調：'+LVD[lvl()]+'\n話し方：'+DD[dia()]+'\n'+
+'日付：'+md(new Date())+'\nユーザーの目標：'+GOALN[s.goal]+'（'+s.weeks+'週間のプログラム、第'+(Math.min(selWeek,s.weeks-1)+1)+'週）\n'+
+'今日のメニュー：\n'+menu+'\n'+(prev.length?'前回の記録：\n'+prev.join('\n')+'\n':'')+
+'ルール：各セリフは25文字以内。読み上げ用なので記号・絵文字・英字略語は使わない。数字は半角。口調と性別に合った語尾にする。同じ言い回しを繰り返さない。\n'+
+'場面：start=セット開始、half=半分、two=あと2回、last=ラスト1回、done=セット完了、early=目標回数の前で終了、restStart=休憩開始（休憩時間が入る位置に必ず {t} と書く）、rest10=休憩残り10秒、restEnd=休憩終わり、allDone=その種目の全セット完了。\n'+
+'ex には今日のメニューの全種目を、種目名を上と一字一句同じにして入れる。\n'+
+'次の形のJSONだけを返す（配列の個数もこのとおり）：\n'+
+'{"generic":{"start":["","",""],"half":["","",""],"two":["","",""],"last":["","",""],"done":["","",""],"early":["",""],"restStart":["{t}…","",""],"rest10":["",""],"restEnd":["","",""],"allDone":["",""]},"ex":{"種目名":{"start":"","last":"","done":""}}}'}
+const AIR={not_granted:'AIの利用が許可されていません',rate_limited:'利用上限です。しばらくしてから',sampling_disabled:'この画面ではAIを使えません',not_declared:'この画面ではAIを使えません',capability_disabled:'この画面ではAIを使えません',capability_removed:'この画面ではAIを使えません',invalid_json:'うまく作れませんでした。もう一度お試しください',empty_completion:'うまく作れませんでした。もう一度お試しください',refused:'うまく作れませんでした。もう一度お試しください',invalid_request:'うまく作れませんでした。もう一度お試しください',prompt_too_large:'うまく作れませんでした。もう一度お試しください',session_expired:'ログインし直してください',upstream_error:'通信エラー。もう一度お試しください'};
+function getSample(){if(!SAMPP){try{SAMPP=window.claude&&typeof window.claude.use==='function'?Promise.resolve(window.claude.use('sample')).catch(()=>null):Promise.resolve(null)}catch(e){SAMPP=Promise.resolve(null)}
+SAMPP.then(x=>{if(!x)aiDisable('この画面ではAIを使えません');aiUI()})}return SAMPP}
+function aiDisable(msg){aiOff=msg;const ai=$('lines-ai');ai.disabled=true;if(ai.checked){$('lines-fixed').checked=true;save(read())}aiUI()}
+function aiNote(t){aiErr={key:aiCtx().key,t};aiUI()}
+function aiOv(t){$('tm-ai').textContent=t;$('cv-ai').textContent=t}
+function aiUI(){
+const st=$('ai-status'),b=$('ai-make'),on=aiMode();$('ai-row').hidden=!(on||aiOff);b.hidden=!on;
+if(aiOff){st.textContent=aiOff;return}
+if(!on)return;
+if(aiBusy){st.textContent='作成中…';b.disabled=true;return}
+b.disabled=false;const c=aiCtx(),ok=!!AIC&&AIC.key===c.key;
+b.textContent=ok?'作り直す':'今日のセリフを作る';
+if(aiErr&&aiErr.key===c.key){st.textContent=aiErr.t;return}
+if(ok){const d=new Date(AIC.at);st.textContent='今日の分を作成済み（'+md(d)+' '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')+'）'}else st.textContent='未作成'}
+async function aiMake(refresh){
+if(aiBusy||!aiMode())return;const c=aiCtx();aiBusy=c.key;aiErr=null;aiUI();
+const S=await getSample();
+if(!S){aiBusy=null;aiDisable('この画面ではAIを使えません');return}
+aiOv('セリフを作成中…');
+try{
+const o=await S.json(aiPrompt(c),{modelTier:'quick',cache:refresh?{gcTime:86400000,refresh:true}:{gcTime:86400000}});
+const d=aiValid(o,c.names);
+if(!d){aiFailKey=c.key;aiErr={key:c.key,t:'作れませんでした。定型を使います'}}
+else{AIC={key:c.key,data:d,at:Date.now()};aiFailKey='';try{localStorage.setItem(AKEY,JSON.stringify(AIC))}catch(e){}}
+}catch(e){
+const code=e&&e.code;aiFailKey=c.key;
+if(code==='cancelled'){aiErr=null}
+else if(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].includes(code)){aiBusy=null;aiOv('');aiDisable('作れませんでした：'+AIR[code]);return}
+else aiErr={key:c.key,t:'作れませんでした：'+(AIR[code]||AIR.upstream_error)};
+}finally{aiBusy=null;aiOv('')}
+aiUI()}
+// 声でカウント／休憩タイマーの最初の利用時：まだなければ作る（待たずに定型で進める）。同じキーで失敗済みなら自動では作り直さない
+function aiAuto(){if(!aiMode()||aiBusy)return;const k=aiCtx().key;if((AIC&&AIC.key===k)||aiFailKey===k)return;aiMake(false)}
+$('ai-make').addEventListener('click',()=>{const k=aiCtx().key;aiMake(!!AIC&&AIC.key===k)});
+
+const KEY='training-plan-maker-v2';
+function save(s){try{localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
+function load(){
+let s=null;try{s=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+if(!s) return;
+try{
+const set=(n,v)=>{const el=document.querySelector('input[name="'+n+'"][value="'+v+'"]');if(el)el.checked=true;};
+if(s.pro)set('pro',s.pro);if(s.voice)set('voice',s.voice);if(s.tempo)set('tempo',s.tempo);if(s.sdo!=null)$('sdo').value=Math.min(4,+s.sdo+(s.sv2?0:1));if(s.vg)set('vg',s.vg);if(s.dia)set('dia',s.dia);if(s.lines)set('lines',s.lines);const ok=x=>isFinite(+x)&&x!==null&&x!==''&&Math.abs(+x)<=0.2001?+x:0;$('vpitch').value=ok(s.vp);$('vrate').value=ok(s.vr);if(s.vname)pendingVoice=s.vname;
+set('sex',s.sex);set('goal',s.goal);set('days',s.days);set('eq',s.eq);
+$('age').value=s.age;$('height').value=s.h;$('weight').value=s.w;$('exp').value=s.exp;if(s.start!=null)$('start').value=s.start;$('weeks').value=s.weeks;
+if(s.lv) ORDER.forEach(g=>{const el=$('lv-'+g+'-'+(s.lv[g]||0));if(el)el.checked=true;});
+$('f-cardio').checked=!!s.cardioOn;
+}catch(e){}
+}
+load();
+getSample();
+try{pickVoice();fillVoices()}catch(e){}
+sdoLabel();vvLabel();
+$('mbar-go').addEventListener('click',()=>out.scrollIntoView({behavior:'smooth',block:'start'}));
+document.querySelector('aside').addEventListener('input',render);
+document.querySelector('aside').addEventListener('change',render);
+render();
+})();
+</script>
+
+</body></html>
