@@ -1262,7 +1262,7 @@ function csvAll(){const L=['日付,週,曜日,種目,セット,重量,回数'];
   return L.join('\n')}
 function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compute(s);
   const days=histDays(),t=today0(),tk=ymd(t);let h='<h3>これまでの記録</h3>';
-  if(!days.length){el.innerHTML=h+'<p class="hint">セットの丸を押して記録すると、ここに達成率・カレンダー・重さの伸びが表示されます。</p>'+bkHTML();return}
+  if(!days.length){el.innerHTML=h+'<p class="hint">セットの丸を押して記録すると、ここに達成率・カレンダー・重さの伸びが表示されます。</p>'+wtHTML(s)+bkHTML();return}
   const ctx=mkCtx(s,R),mon0=monday(t),ws=Array.from({length:8},(_,k)=>{const mon=addDays(mon0,-7*(7-k)),st=weekStat(ctx,mon);return Object.assign(st,{lab:k===7?'今週':md(mon),cur:k===7})});
   const cw=ws[7],st=streakOf(ctx),totS=days.reduce((a,k)=>a+hDone(HIST[k]),0),totR=days.reduce((a,k)=>a+Object.values(HIST[k].ex).reduce((b,e)=>b+(e.reps||[]).reduce((c,r)=>c+(+r||0),0),0),0);
   const pdw=pd(days[0]);
@@ -1289,11 +1289,26 @@ function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compu
       (C?'<span class="hp-ch'+(C.up?' up':C.dn?' dn':'')+'" id="hp-ch">'+C.t+'</span>':'')+'</div>'+
       (P.pts.length?'<div class="hscroll">'+lineSVG(P.pts,P.unit)+'</div>':'')+
       '<p class="hint">'+(P.wm?'推定1RM＝その日の一番良いセットの「重さ×(1＋回数÷30)」。1回だけ挙げられる重さの目安です。':'重さを使わない記録なので、その日の合計回数で表示しています。')+(P.pts.length<2?'記録が2回以上になると、最初との差が出ます。':' 最初の記録と最新の記録の差を表示しています。')+'</p></div>'}
-  h+='<div class="hbtns"><button type="button" class="tbig" id="h-copy">記録をコピー</button><span id="h-copy-st" role="status" aria-live="polite"></span></div><div id="h-csv" hidden></div>'+bkHTML();
+  h+=wtHTML(s)+'<div class="hbtns"><button type="button" class="tbig" id="h-copy">記録をコピー</button><span id="h-copy-st" role="status" aria-live="polite"></span></div><div id="h-csv" hidden></div>'+bkHTML();
   el.innerHTML=h}
+// 体重の記録（1日1件。同じ日に入れ直すと上書き）
+const WKEY='training-plan-weight-v1';let WT={};try{WT=JSON.parse(localStorage.getItem(WKEY)||'{}')||{}}catch(e){}
+function saveWt(){try{localStorage.setItem(WKEY,JSON.stringify(WT))}catch(e){}}
+function wtDays(){return Object.keys(WT).filter(k=>pd(k)&&+WT[k]>0).sort()}
+function wtHTML(s){const ds=wtDays(),tk=ymd(today0()),last=ds.length?WT[ds[ds.length-1]]:s.w,cur=WT[tk]!=null?WT[tk]:last,
+    pts=ds.slice(-60).map(k=>({lab:md(pd(k)),y:+WT[k]})),C=chgText({wm:true,pts});
+  return '<div class="chart" id="wt"><p class="hsub">体重の変化</p>'+SBX('今日の体重（kg）','<input type="number" id="wt-in" inputmode="decimal" min="20" max="300" step="0.1" value="'+(+cur||'')+'">')+
+    '<div class="hbtns" style="margin:8px 0"><button type="button" class="tbig" id="wt-save">'+(WT[tk]!=null?'今日の体重を直す':'今日の体重を記録')+'</button>'+(WT[tk]!=null?'<button type="button" class="tbig" id="wt-del">今日の分を消す</button>':'')+(C?'<span class="hp-ch" id="wt-ch">'+C.t+'</span>':'')+'</div><div id="wt-st" class="hint" role="status" aria-live="polite"></div>'+
+    (pts.length?'<div class="hscroll">'+lineSVG(pts,'kg')+'</div>':'')+
+    '<p class="hint">'+(pts.length<2?'記録が2日以上になると、最初との差が出ます。':'グラフは直近60件、差は最初の記録と最新の記録の比較です。')+'毎日同じ時間（朝起きてトイレのあとなど）に測ると比べやすくなります。</p></div>'}
+document.addEventListener('click',e=>{const tk=ymd(today0());
+  if(e.target.closest('#wt-save')){const v=Math.round(parseFloat($('wt-in').value)*10)/10;
+    if(!(v>=20&&v<=300)){$('wt-st').textContent='20〜300kgの範囲で入力してください。';return}
+    WT[tk]=v;saveWt();renderHist();return}
+  if(e.target.closest('#wt-del')){delete WT[tk];saveWt();renderHist()}});
 // 記録の保存と復元（別の端末へ移す・消えたときに戻す）
 const BK_APP='training-plan-maker';let bkPending=null;
-function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY}}
+function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY,weight:WKEY}}
 function bkHTML(){return '<div class="chart" id="bk"><p class="hsub">記録の保存と復元</p><p class="hint">機種変更のときや、記録が消えたときのために、設定と記録を1つのファイルに保存できます。読み込むと、この端末の記録はファイルの内容に置き換わります。</p><div class="hbtns"><button type="button" class="tbig" id="bk-save">ファイルに保存</button><button type="button" class="tbig" id="bk-open">ファイルから復元</button></div><input type="file" id="bk-file" accept=".json,application/json" hidden aria-label="保存ファイルを選ぶ"><div id="bk-st" role="status" aria-live="polite"></div></div>'}
 function bkSafe(x){if(typeof x==='string')return !/[<>"'`]/.test(x);if(Array.isArray(x))return x.every(bkSafe);if(x&&typeof x==='object')return Object.keys(x).every(k=>bkSafe(k)&&bkSafe(x[k]));return x===null||typeof x==='number'||typeof x==='boolean'}
 function bkParse(txt){let o;try{o=JSON.parse(txt)}catch(e){return null}
