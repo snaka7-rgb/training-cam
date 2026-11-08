@@ -1262,7 +1262,7 @@ function csvAll(){const L=['日付,週,曜日,種目,セット,重量,回数'];
   return L.join('\n')}
 function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compute(s);
   const days=histDays(),t=today0(),tk=ymd(t);let h='<h3>これまでの記録</h3>';
-  if(!days.length){el.innerHTML=h+'<p class="hint">セットの丸を押して記録すると、ここに達成率・カレンダー・重さの伸びが表示されます。</p>';return}
+  if(!days.length){el.innerHTML=h+'<p class="hint">セットの丸を押して記録すると、ここに達成率・カレンダー・重さの伸びが表示されます。</p>'+bkHTML();return}
   const ctx=mkCtx(s,R),mon0=monday(t),ws=Array.from({length:8},(_,k)=>{const mon=addDays(mon0,-7*(7-k)),st=weekStat(ctx,mon);return Object.assign(st,{lab:k===7?'今週':md(mon),cur:k===7})});
   const cw=ws[7],st=streakOf(ctx),totS=days.reduce((a,k)=>a+hDone(HIST[k]),0),totR=days.reduce((a,k)=>a+Object.values(HIST[k].ex).reduce((b,e)=>b+(e.reps||[]).reduce((c,r)=>c+(+r||0),0),0),0);
   const pdw=pd(days[0]);
@@ -1289,8 +1289,45 @@ function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compu
       (C?'<span class="hp-ch'+(C.up?' up':C.dn?' dn':'')+'" id="hp-ch">'+C.t+'</span>':'')+'</div>'+
       (P.pts.length?'<div class="hscroll">'+lineSVG(P.pts,P.unit)+'</div>':'')+
       '<p class="hint">'+(P.wm?'推定1RM＝その日の一番良いセットの「重さ×(1＋回数÷30)」。1回だけ挙げられる重さの目安です。':'重さを使わない記録なので、その日の合計回数で表示しています。')+(P.pts.length<2?'記録が2回以上になると、最初との差が出ます。':' 最初の記録と最新の記録の差を表示しています。')+'</p></div>'}
-  h+='<div class="hbtns"><button type="button" class="tbig" id="h-copy">記録をコピー</button><span id="h-copy-st" role="status" aria-live="polite"></span></div><div id="h-csv" hidden></div>';
+  h+='<div class="hbtns"><button type="button" class="tbig" id="h-copy">記録をコピー</button><span id="h-copy-st" role="status" aria-live="polite"></span></div><div id="h-csv" hidden></div>'+bkHTML();
   el.innerHTML=h}
+// 記録の保存と復元（別の端末へ移す・消えたときに戻す）
+const BK_APP='training-plan-maker';let bkPending=null;
+function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY}}
+function bkHTML(){return '<div class="chart" id="bk"><p class="hsub">記録の保存と復元</p><p class="hint">機種変更のときや、記録が消えたときのために、設定と記録を1つのファイルに保存できます。読み込むと、この端末の記録はファイルの内容に置き換わります。</p><div class="hbtns"><button type="button" class="tbig" id="bk-save">ファイルに保存</button><button type="button" class="tbig" id="bk-open">ファイルから復元</button></div><input type="file" id="bk-file" accept=".json,application/json" hidden aria-label="保存ファイルを選ぶ"><div id="bk-st" role="status" aria-live="polite"></div></div>'}
+function bkSafe(x){if(typeof x==='string')return !/[<>"'`]/.test(x);if(Array.isArray(x))return x.every(bkSafe);if(x&&typeof x==='object')return Object.keys(x).every(k=>bkSafe(k)&&bkSafe(x[k]));return x===null||typeof x==='number'||typeof x==='boolean'}
+function bkParse(txt){let o;try{o=JSON.parse(txt)}catch(e){return null}
+  if(!o||o.app!==BK_APP||o.v!==1||!o.data||typeof o.data!=='object'||Array.isArray(o.data))return null;
+  const isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x),D=o.data;
+  for(const n of Object.keys(bkKeys())){if(!(n in D))continue;if(!(isO(D[n])||(n==='start'&&D[n]===null)))return null}
+  if(!isO(D.history)||!bkSafe(D))return null;
+  return o}
+function bkMsg(t){const s=$('bk-st');if(s)s.textContent=t}
+function bkApply(o){const ks=bkKeys(),old={};
+  try{Object.keys(ks).forEach(n=>{old[n]=localStorage.getItem(ks[n])});
+    Object.keys(ks).forEach(n=>{if(n in o.data&&o.data[n]!==null)localStorage.setItem(ks[n],JSON.stringify(o.data[n]));else localStorage.removeItem(ks[n])});
+    return true}
+  catch(e){try{Object.keys(ks).forEach(n=>{if(old[n]==null)localStorage.removeItem(ks[n]);else localStorage.setItem(ks[n],old[n])})}catch(e2){}return false}}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#bk-save')){try{const ks=bkKeys(),data={};
+      Object.keys(ks).forEach(n=>{const v=localStorage.getItem(ks[n]);if(v!=null)data[n]=JSON.parse(v)});
+      if(!data.history)data.history={};
+      const url=URL.createObjectURL(new Blob([JSON.stringify({app:BK_APP,v:1,at:new Date().toISOString(),data})],{type:'application/json'})),a=document.createElement('a');
+      a.href=url;a.download='training-plan-backup-'+ymd(new Date())+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+      bkMsg('保存しました。ダウンロードしたファイルを、なくさない場所に移しておいてください。')}catch(err){bkMsg('保存できませんでした。ブラウザの設定を確認してください。')}
+    return}
+  if(e.target.closest('#bk-open')){$('bk-file').click();return}
+  if(e.target.closest('#bk-no')){bkPending=null;bkMsg('復元をやめました。');return}
+  if(e.target.closest('#bk-yes')){if(!bkPending)return;if(bkApply(bkPending)){bkPending=null;location.reload()}else bkMsg('復元できませんでした。今までの記録はそのままです。');}
+});
+document.addEventListener('change',e=>{if(!e.target||e.target.id!=='bk-file')return;const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;bkPending=null;
+  if(f.size>5e6){bkMsg('このファイルは大きすぎるため読み込めません。');return}
+  const bad=()=>bkMsg('このファイルは読み込めません。このアプリで保存したファイルを選んでください。');
+  const rd=new FileReader();rd.onerror=bad;rd.onload=()=>{const o=bkParse(String(rd.result));if(!o){bad();return}
+    bkPending=o;const n=Object.keys(o.data.history).filter(pd).length,at=new Date(o.at),when=isNaN(at)?'日時不明':md(at)+' '+at.getHours()+':'+String(at.getMinutes()).padStart(2,'0');
+    const s=$('bk-st');if(!s)return;s.textContent='';const p=document.createElement('p');p.className='hint';p.textContent=when+' に保存した記録（'+n+'日分）で、この端末の記録を置き換えますか？ 元には戻せません。';
+    const w=document.createElement('div');w.className='hbtns';w.innerHTML='<button type="button" class="tbig" id="bk-yes">置き換える</button><button type="button" class="tbig" id="bk-no">やめる</button>';s.append(p,w)};
+  rd.readAsText(f)});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-hd]');if(!b||b.disabled)return;HSEL=b.dataset.hd;renderHist();const d=$('hist-det');if(d&&d.scrollIntoView)d.scrollIntoView({block:'nearest'})});
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='hp-sel'){HSEL_EX=e.target.value;renderHist()}});
 document.addEventListener('click',e=>{if(!e.target.closest('#h-copy'))return;const txt=csvAll(),st=$('h-copy-st'),box=$('h-csv');
