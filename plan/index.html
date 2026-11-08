@@ -1,4 +1,4 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1d4fbf"><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1d4fbf"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="トレ計画"><script>if(location.pathname.split('/').slice(-2,-1)[0]==='plan'&&window.isSecureContext){document.write('<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">');addEventListener('load',function(){try{navigator.serviceWorker&&navigator.serviceWorker.register('sw.js')}catch(e){}})}</script><style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
 <title>トレーニング計画メーカー</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -334,6 +334,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .hp-ch.up{color:var(--p-green)}
 .hp-ch.dn{color:var(--warn-ink)}
 .hbtns{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+#out .sd{min-width:38px;min-height:38px}
+#out .tbtn,#out .cbtn{min-height:40px}
 .hbtns .tbig{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
 #h-copy-st{font-size:13px;color:var(--p-green);font-weight:700}
 #h-csv textarea{width:100%;margin-top:6px;font:12px/1.5 var(--f-num);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)}
@@ -1295,11 +1297,24 @@ function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compu
 const WKEY='training-plan-weight-v1';let WT={};try{WT=JSON.parse(localStorage.getItem(WKEY)||'{}')||{}}catch(e){}
 function saveWt(){try{localStorage.setItem(WKEY,JSON.stringify(WT))}catch(e){}}
 function wtDays(){return Object.keys(WT).filter(k=>pd(k)&&+WT[k]>0).sort()}
+// 直近の記録と、その約2週間前（10〜21日前で14日に最も近い記録）を比べて食事の調整を提案する
+function wtTrend(ds){if(!ds.length)return null;const lk=ds[ds.length-1],lv=+WT[lk],ld=pd(lk);let bk=null,gap=99;
+  ds.forEach(k=>{const g=dd(ld,pd(k));if(g>=10&&g<=21&&Math.abs(g-14)<gap){gap=Math.abs(g-14);bk=k}});
+  return {lk,lv,stale:dd(today0(),ld)>14,bk,days:bk?dd(ld,pd(bk)):0,d:bk?Math.round((lv-WT[bk])*10)/10:0}}
+function wtMsg(goal,d,w){const up='夜のご飯を半杯増やしましょう。',dn='夜のご飯を半杯減らしましょう。';
+  if(goal==='hyp')return d<=0?'増えていないので、'+up:d>=.5?'増えるペースが速めなので、'+dn:'順調です。今の食事を続けましょう。';
+  if(goal==='cut')return d>=0?'減っていないので、'+dn+'肉・魚の量は減らさなくて大丈夫です。':d<-w*.02?'減るペースが速めなので、'+up:'順調です。今の食事を続けましょう。';
+  return d>=1?'増えているので、'+dn:d<=-1?'減っているので、'+up:'安定しています。今の食事を続けましょう。'}
+function wtAdvice(s,ds){const T=wtTrend(ds);if(!T)return '';const sg=T.d>0?'+':T.d<0?'−':'±';
+  let x=T.stale?'最後の記録から2週間以上たっています。今の体重を記録すると、食事の提案が出ます。':T.bk?'この'+T.days+'日間で '+sg+Math.abs(T.d).toFixed(1)+'kg。'+wtMsg(s.goal,T.d,T.lv):'2週間ほど記録がたまると、ここに食事の調整の提案が出ます。';
+  let b='';if(!T.stale&&T.lv>=35&&T.lv<=200&&Math.abs(T.lv-s.w)>=.5)b='<button type="button" class="tbig" id="wt-plan" data-v="'+T.lv+'">計画の体重を '+T.lv.toFixed(1)+'kg にする</button>';
+  return '<div class="stat" id="wt-adv" style="margin:8px 0"><span class="k">食事の提案</span><p style="margin:4px 0 8px">'+x+'</p>'+(b?'<div class="hbtns">'+b+'</div><p class="hint">押すと、カロリーとたんぱく質の目標を計算し直します。今は '+s.w+'kg で計算しています。</p>':'')+'</div>'}
+document.addEventListener('click',e=>{const b=e.target.closest('#wt-plan');if(!b)return;$('weight').value=b.dataset.v;render();const w=$('wt');if(w&&w.scrollIntoView)w.scrollIntoView({block:'start'})});
 function wtHTML(s){const ds=wtDays(),tk=ymd(today0()),last=ds.length?WT[ds[ds.length-1]]:s.w,cur=WT[tk]!=null?WT[tk]:last,
     pts=ds.slice(-60).map(k=>({lab:md(pd(k)),y:+WT[k]})),C=chgText({wm:true,pts});
   return '<div class="chart" id="wt"><p class="hsub">体重の変化</p>'+SBX('今日の体重（kg）','<input type="number" id="wt-in" inputmode="decimal" min="20" max="300" step="0.1" value="'+(+cur||'')+'">')+
     '<div class="hbtns" style="margin:8px 0"><button type="button" class="tbig" id="wt-save">'+(WT[tk]!=null?'今日の体重を直す':'今日の体重を記録')+'</button>'+(WT[tk]!=null?'<button type="button" class="tbig" id="wt-del">今日の分を消す</button>':'')+(C?'<span class="hp-ch" id="wt-ch">'+C.t+'</span>':'')+'</div><div id="wt-st" class="hint" role="status" aria-live="polite"></div>'+
-    (pts.length?'<div class="hscroll">'+lineSVG(pts,'kg')+'</div>':'')+
+    wtAdvice(s,ds)+(pts.length?'<div class="hscroll">'+lineSVG(pts,'kg')+'</div>':'')+
     '<p class="hint">'+(pts.length<2?'記録が2日以上になると、最初との差が出ます。':'グラフは直近60件、差は最初の記録と最新の記録の比較です。')+'毎日同じ時間（朝起きてトイレのあとなど）に測ると比べやすくなります。</p></div>'}
 document.addEventListener('click',e=>{const tk=ymd(today0());
   if(e.target.closest('#wt-save')){const v=Math.round(parseFloat($('wt-in').value)*10)/10;
