@@ -514,6 +514,15 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         </div>
       </div>
       <div class="field">
+        <span class="lbl">トレーニングの日の朝に通知</span>
+        <div class="seg">
+          <label><input type="radio" name="ntf" id="ntf-off" value="off" checked><span>なし</span></label>
+          <label><input type="radio" name="ntf" id="ntf-on" value="on"><span>通知する</span></label>
+        </div>
+        <div class="hp-row" style="margin-top:8px"><label for="ntf-t">時刻</label><select id="ntf-t" aria-label="通知の時刻"><option>5:00</option><option>5:30</option><option>6:00</option><option>6:30</option><option selected>7:00</option><option>7:30</option><option>8:00</option><option>8:30</option><option>9:00</option><option>10:00</option><option>12:00</option><option>17:00</option><option>18:00</option><option>19:00</option></select></div>
+        <p class="hint" id="ntf-st"></p>
+      </div>
+      <div class="field">
         <label class="lbl" for="weeks">目標期間</label>
         <select id="weeks">
           <option value="4">4週間（1か月）</option>
@@ -585,7 +594,7 @@ function read(){
     age:num('age',14,85,35),h:num('height',130,215,170),w:num('weight',35,200,65),
     exp:+$('exp').value,weeks:+$('weeks').value,start:+$('start').value,
     lv:Object.fromEntries(ORDER.map(g=>[g,+((document.querySelector('input[name="lv-'+g+'"]:checked')||{}).value||0)])),
-    cardioOn:$('f-cardio').checked,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),autonext:v('autonext'),bgm:v('bgm'),bgmvol:+$('bgmvol').value,vg:v('vg'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
+    cardioOn:$('f-cardio').checked,ntf:v('ntf'),ntfT:$('ntf-t').value,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),autonext:v('autonext'),bgm:v('bgm'),bgmvol:+$('bgmvol').value,vg:v('vg'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
     get focus(){return ORDER.filter(g=>this.lv[g]>0).concat(this.cardioOn?['cardio']:[])}};
 }
 (function buildParts(){
@@ -868,7 +877,7 @@ function render(){
   h+='<p class="foot">数値は一般的な推定式（基礎代謝：Mifflin-St Jeor式）とトレーニング研究の目安から計算した参考値です。持病・けが・服薬がある場合は、始める前に医師に相談してください。痛みが出た種目は中止し、別の種目に置き換えてください。</p>';
 
   out.innerHTML=h;
-  renderToday(s,R);renderHist(s,R);
+  renderToday(s,R);renderHist(s,R);ntfSync(s,R);
   out.querySelectorAll('.week').forEach(b=>b.addEventListener('click',()=>{selWeek=+b.dataset.w;render();}));
   bindPress();
   $('mbar-t').textContent=GOALN[s.goal]+' ・ '+s.weeks+'週 ・ 週'+s.days+'日 ・ '+R.kcal.toLocaleString()+'kcal';
@@ -1321,6 +1330,29 @@ document.addEventListener('click',e=>{const tk=ymd(today0());
     if(!(v>=20&&v<=300)){$('wt-st').textContent='20〜300kgの範囲で入力してください。';return}
     WT[tk]=v;saveWt();renderHist();return}
   if(e.target.closest('#wt-del')){delete WT[tk];saveWt();renderHist()}});
+// 今日のメニュー通知: 予定表（30日分）を Cache に書き、sw.js が時刻になったら通知を出す
+const NCACHE='training-plan-ntf';let ntfTimer=0,ntfWT=0;
+function ntfOK(){return /^https?:$/.test(location.protocol)&&'Notification' in window&&'serviceWorker' in navigator&&!!window.isSecureContext&&!!window.caches}
+function ntfSched(s,R){const ctx=mkCtx(s,R),t=today0(),days={};for(let k=0;k<31;k++){const dt=addDays(t,k),x=schedOf(s,dt);if(x)days[ymd(dt)]=ctx.days(x.wk)[x.di].name}return days}
+async function ntfRead(){try{const r=await (await caches.open(NCACHE)).match('sched');return r?await r.json():null}catch(e){return null}}
+async function ntfWrite(s,R){try{const old=await ntfRead(),o={on:s.ntf==='on',time:s.ntfT||'7:00',days:ntfSched(s,R),shown:(old&&old.shown)||{}};
+  await (await caches.open(NCACHE)).put('sched',new Response(JSON.stringify(o),{headers:{'content-type':'application/json'}}));return o}catch(e){return null}}
+async function ntfCheck(){try{const reg=await navigator.serviceWorker.ready;if(reg.active)reg.active.postMessage({type:'ntf-check'})}catch(e){}}
+function ntfArm(s){clearTimeout(ntfTimer);ntfTimer=0;if(s.ntf!=='on')return;const [h,m]=String(s.ntfT||'7:00').split(':').map(Number),at=new Date();at.setHours(h,m||0,0,0);let ms=at-Date.now();if(ms<0)ms+=864e5;
+  ntfTimer=setTimeout(()=>{ntfCheck();ntfArm(s)},Math.min(ms+1500,2147e6))}
+async function ntfPeriodic(on){try{const reg=await navigator.serviceWorker.ready;if(!('periodicSync' in reg))return;if(!on){await reg.periodicSync.unregister('ntf-daily');return}
+  const st=await navigator.permissions.query({name:'periodic-background-sync'});if(st.state==='granted')await reg.periodicSync.register('ntf-daily',{minInterval:6*3600e3})}catch(e){}}
+function ntfUI(s){const el=$('ntf-st');if(!el)return;$('ntf-t').disabled=s.ntf!=='on';
+  if(!ntfOK()){el.textContent=location.protocol==='file:'?'通知は、公開ページ（https）を開いたときに使えます。ホーム画面に追加しておくと確実です。':'このブラウザでは通知が使えません。';return}
+  if(s.ntf!=='on'){el.textContent='トレーニング予定の日に「今日は○○の日」と知らせます。';return}
+  const p=Notification.permission,sa=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(p==='denied')el.textContent='通知がブラウザで拒否されています。スマホの設定で、このサイトの通知を許可してください。';
+  else if(p!=='granted'){el.innerHTML='まず通知の許可が必要です。 <button type="button" class="tbig" id="ntf-ask">通知を許可する</button>';}
+  else el.textContent='通知はオンです。'+(sa?'':'iPhoneでは、ホーム画面に追加したアプリから開くと届きます。')+'アプリを閉じているときは、時刻どおりに届かないことがあります。'}
+function ntfSync(s,R){if(!$('ntf-st'))return;ntfUI(s);if(!ntfOK())return;const on=s.ntf==='on'&&Notification.permission==='granted';
+  clearTimeout(ntfWT);ntfWT=setTimeout(()=>{ntfWrite(s,R).then(()=>{if(on)ntfCheck()});ntfPeriodic(on)},300);ntfArm(on?s:{ntf:'off'})}
+document.addEventListener('click',e=>{if(!e.target.closest('#ntf-ask'))return;try{Notification.requestPermission().then(()=>render())}catch(err){}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&read().ntf==='on')ntfCheck()});
 // 記録の保存と復元（別の端末へ移す・消えたときに戻す）
 const BK_APP='training-plan-maker';let bkPending=null;
 function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY,weight:WKEY}}
@@ -1748,7 +1780,7 @@ function load(){
   if(!s) return;
   try{
     const set=(n,v)=>{const el=document.querySelector('input[name="'+n+'"][value="'+v+'"]');if(el)el.checked=true;};
-    if(s.autonext)set('autonext',s.autonext);if(s.bgm)set('bgm',s.bgm);if(s.bgmvol)$('bgmvol').value=s.bgmvol;
+    if(s.ntf)set('ntf',s.ntf);if(s.ntfT)$('ntf-t').value=s.ntfT;if(s.autonext)set('autonext',s.autonext);if(s.bgm)set('bgm',s.bgm);if(s.bgmvol)$('bgmvol').value=s.bgmvol;
     if(s.pro)set('pro',s.pro);if(s.voice)set('voice',s.voice);if(s.tempo)set('tempo',s.tempo);if(s.sdo!=null)$('sdo').value=Math.min(4,+s.sdo+(s.sv2?0:1));if(s.vg)set('vg',s.vg);if(s.dia)set('dia',s.dia);if(s.lines)set('lines',s.lines);const ok=x=>isFinite(+x)&&x!==null&&x!==''&&Math.abs(+x)<=0.2001?+x:0;$('vpitch').value=ok(s.vp);$('vrate').value=ok(s.vr);if(s.vname)pendingVoice=s.vname;
     set('sex',s.sex);set('goal',s.goal);set('days',s.days);set('eq',s.eq);
     $('age').value=s.age;$('height').value=s.h;$('weight').value=s.w;$('exp').value=s.exp;if(s.start!=null)$('start').value=s.start;$('weeks').value=s.weeks;
