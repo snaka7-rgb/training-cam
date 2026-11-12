@@ -363,7 +363,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <header class="top">
     <h1>トレーニング計画メーカー</h1>
     <p>体格・目的・期間から、週ごとのメニューと食事の目安を組み立てます</p>
-    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.3（2026/11/12）</p>
+    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.3.1（2026/11/12）</p>
     <div class="updrow"><button type="button" class="updb" id="upd">最新版か確かめる</button><span id="upd-st" role="status" aria-live="polite"></span></div>
   </header>
   <div class="grid">
@@ -2014,22 +2014,34 @@ function load(){
     if(s.cap!=null&&$('cap').querySelector('option[value="'+(+s.cap||0)+'"]'))$('cap').value=+s.cap||0;
   }catch(e){}
 }
-/* ---------- 最新版にする：公開ページの版を調べ、新しければ読み込み直す（記録はそのまま） ---------- */
-const UKEY='training-plan-upd-v1',VER=($('appver').textContent.match(/[0-9]+(?:\.[0-9]+)*/)||[''])[0];
+/* ---------- 最新版にする：公開ページの版を調べ、新しければ入れ替える（記録はそのまま） ----------
+   2.3.1: 入れ替えは reload に頼らない。確かめるときは ?u=時刻 を付けて、配信側やブラウザの古い写しを避ける。
+   取ってきた新しい版をオフライン用の保存（'./'）に入れてから ?v=版 の住所へ移り、移った先で版を確かめる。 */
+const UKEY='training-plan-upd-v1',UTO='training-plan-updto-v1',VER=($('appver').textContent.match(/[0-9]+(?:\.[0-9]+)*/)||[''])[0];
 function verOf(t){const m=/id="appver"[^>]*>\s*バージョン\s*([0-9]+(?:\.[0-9]+)*)/.exec(t||'');return m?m[1]:''}
 function verCmp(a,b){const x=a.split('.').map(Number),y=b.split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0}
 function updMsg(t){$('upd-st').textContent=t}
-async function updGo(v){updMsg('新しい版（'+v+'）に入れ替えます…');
-  try{if(navigator.serviceWorker){const g=await navigator.serviceWorker.getRegistration();if(g)await g.update()}}catch(e){}
-  location.reload()}
+async function updPut(t){try{if(!window.caches)return;const ks=(await caches.keys()).filter(k=>/^training-plan-v\d+$/.test(k));if(!ks.length)return; // sw.js の C と同じ保存場所
+  const c=await caches.open(ks[ks.length-1]);await c.put(new URL('./',location.href).href,new Response(t,{status:200,headers:{'content-type':'text/html; charset=utf-8','x-tp-saved':String(Date.now())}}))}catch(e){}}
+async function updGo(v,t){updMsg('新しい版（'+v+'）に入れ替えます…');
+  try{sessionStorage.setItem(UTO,JSON.stringify({v,n:1}))}catch(e){}
+  await updPut(t);
+  try{if(navigator.serviceWorker){const g=await navigator.serviceWorker.getRegistration();if(g)await Promise.race([g.update(),new Promise(r=>setTimeout(r,4000))])}}catch(e){}
+  location.replace(location.pathname+'?v='+encodeURIComponent(v))}
 async function updCheck(auto){
   if(!/^https?:$/.test(location.protocol)){if(!auto)updMsg('ファイルで開いているときは、ここからは入れ替えられません。ドライブから新しいファイルを入れ直すか、公開ページを使ってください。');return}
   if(!auto)updMsg('確かめています…');
-  try{const r=await fetch(location.pathname,{cache:'no-store'});if(!r.ok)throw 0;const v=verOf(await r.text());if(!v)throw 0;
-    try{localStorage.setItem(UKEY,String(Date.now()))}catch(e){}
-    if(verCmp(v,VER)>0){if(auto){updMsg('新しい版（'+v+'）があります。');const b=$('upd');b.textContent='最新版（'+v+'）にする';b.classList.add('new')}else updGo(v)}
-    else if(!auto)updMsg('いまの版（'+VER+'）が最新です。')
+  try{const r=await fetch(location.pathname+'?u='+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;const t=await r.text(),v=verOf(t);if(!v)throw 0;
+    if(verCmp(v,VER)>0){if(auto){updMsg('新しい版（'+v+'）があります。');const b=$('upd');b.textContent='最新版（'+v+'）にする';b.classList.add('new')}else updGo(v,t)}
+    else{try{localStorage.setItem(UKEY,String(Date.now()))}catch(e){} // 新しい版が見つかったときは記さない（次に開いたときもお知らせを出す）
+      if(!auto)updMsg('いまの版（'+VER+'）が最新です。')}
   }catch(e){if(!auto)updMsg('確かめられませんでした。電波のあるところで、もう一度押してください。')}}
+// 入れ替えのあと: 本当に新しい版になったか確かめる（くり返し読み込まないよう、やり直しは1回だけ）
+try{const q=new URLSearchParams(location.search);let to=null;try{to=JSON.parse(sessionStorage.getItem(UTO)||'null')}catch(e){}
+  if(q.has('v')||q.has('u')){q.delete('v');q.delete('u');q.delete('t');const s=q.toString();history.replaceState(history.state,'',location.pathname+(s?'?'+s:'')+location.hash)} // 住所を元の形に戻す（ホーム画面・ブックマーク用）
+  if(to&&to.v){if(verCmp(VER,to.v)>=0){sessionStorage.removeItem(UTO);updMsg('新しい版（'+VER+'）になりました。記録はそのまま残っています。')}
+    else if((to.n||0)<2){sessionStorage.setItem(UTO,JSON.stringify({v:to.v,n:(to.n||0)+1}));location.replace(location.pathname+'?v='+encodeURIComponent(to.v)+'&t='+Date.now())}
+    else{sessionStorage.removeItem(UTO);updMsg('新しい版（'+to.v+'）にまだ入れ替えられませんでした。公開したばかりのときは届くまで少しかかります。10分ほどたってから、もう一度押してください。')}}}catch(e){}
 $('upd').addEventListener('click',()=>updCheck(false));
 try{let last=0;try{last=+localStorage.getItem(UKEY)||0}catch(e){}
   if(window.isSecureContext&&/\/plan\//.test(location.pathname)&&Date.now()-last>432e5)setTimeout(()=>updCheck(true),3000)}catch(e){}
