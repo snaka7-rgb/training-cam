@@ -352,6 +352,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .t-lim>span{font-size:13px;color:var(--muted);margin-right:2px}
 .limb{min-height:44px;min-width:68px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink);font:700 14px var(--f-body);cursor:pointer;padding:0 12px}
 .limb[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.updrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px}
+.updb{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink);font:700 13.5px var(--f-body);cursor:pointer;padding:0 14px}
+.updb.new{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#upd-st{font-size:13px;color:var(--muted);line-height:1.5}
 .dnote{margin:8px 0 0;font-size:13px;line-height:1.6;color:var(--muted)}
 </style>
 
@@ -359,7 +363,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <header class="top">
     <h1>トレーニング計画メーカー</h1>
     <p>体格・目的・期間から、週ごとのメニューと食事の目安を組み立てます</p>
-    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.1（2026/11/12）</p>
+    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.2（2026/11/12）</p>
+    <div class="updrow"><button type="button" class="updb" id="upd">最新版か確かめる</button><span id="upd-st" role="status" aria-live="polite"></span></div>
   </header>
   <div class="grid">
     <aside class="panel" aria-label="条件">
@@ -1957,6 +1962,25 @@ function load(){
     if(s.cap!=null&&$('cap').querySelector('option[value="'+(+s.cap||0)+'"]'))$('cap').value=+s.cap||0;
   }catch(e){}
 }
+/* ---------- 最新版にする：公開ページの版を調べ、新しければ読み込み直す（記録はそのまま） ---------- */
+const UKEY='training-plan-upd-v1',VER=($('appver').textContent.match(/[0-9]+(?:\.[0-9]+)*/)||[''])[0];
+function verOf(t){const m=/id="appver"[^>]*>\s*バージョン\s*([0-9]+(?:\.[0-9]+)*)/.exec(t||'');return m?m[1]:''}
+function verCmp(a,b){const x=a.split('.').map(Number),y=b.split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0}
+function updMsg(t){$('upd-st').textContent=t}
+async function updGo(v){updMsg('新しい版（'+v+'）に入れ替えます…');
+  try{if(navigator.serviceWorker){const g=await navigator.serviceWorker.getRegistration();if(g)await g.update()}}catch(e){}
+  location.reload()}
+async function updCheck(auto){
+  if(!/^https?:$/.test(location.protocol)){if(!auto)updMsg('ファイルで開いているときは、ここからは入れ替えられません。ドライブから新しいファイルを入れ直すか、公開ページを使ってください。');return}
+  if(!auto)updMsg('確かめています…');
+  try{const r=await fetch(location.pathname,{cache:'no-store'});if(!r.ok)throw 0;const v=verOf(await r.text());if(!v)throw 0;
+    try{localStorage.setItem(UKEY,String(Date.now()))}catch(e){}
+    if(verCmp(v,VER)>0){if(auto){updMsg('新しい版（'+v+'）があります。');const b=$('upd');b.textContent='最新版（'+v+'）にする';b.classList.add('new')}else updGo(v)}
+    else if(!auto)updMsg('いまの版（'+VER+'）が最新です。')
+  }catch(e){if(!auto)updMsg('確かめられませんでした。電波のあるところで、もう一度押してください。')}}
+$('upd').addEventListener('click',()=>updCheck(false));
+try{let last=0;try{last=+localStorage.getItem(UKEY)||0}catch(e){}
+  if(window.isSecureContext&&/\/plan\//.test(location.pathname)&&Date.now()-last>432e5)setTimeout(()=>updCheck(true),3000)}catch(e){}
 load();
 histInit();
 getSample();
