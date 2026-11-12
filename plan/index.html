@@ -363,7 +363,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <header class="top">
     <h1>トレーニング計画メーカー</h1>
     <p>体格・目的・期間から、週ごとのメニューと食事の目安を組み立てます</p>
-    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.2（2026/11/12）</p>
+    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.3（2026/11/12）</p>
     <div class="updrow"><button type="button" class="updb" id="upd">最新版か確かめる</button><span id="upd-st" role="status" aria-live="polite"></span></div>
   </header>
   <div class="grid">
@@ -477,6 +477,16 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         </div>
         <div class="ai-row" id="ai-row" hidden><span id="ai-status" role="status" aria-live="polite"></span><button type="button" class="tryb" id="ai-make">今日のセリフを作る</button></div>
         <p class="hint">AIはトレーニングの日に1回だけ、その日のメニューに合わせたセリフ一式を作ります（1回あたり約2,000トークン、初回は利用の確認が出ます）。作れないときは定型のセリフを使います。</p>
+      </div>
+      <div class="field">
+        <span class="lbl">声の種類</span>
+        <div class="seg">
+          <label><input type="radio" name="vk" id="vk-rec" value="rec" checked><span>きれいな声（録音・標準語のみ）</span></label>
+          <label><input type="radio" name="vk" id="vk-tts" value="tts"><span>スマホの声</span></label>
+        </div>
+        <p class="hint" id="vk-note" role="status" aria-live="polite"></p>
+        <p class="hint">「声」「声の高さ」「話す速さ」はスマホの声のときだけ変わります。</p>
+        <p class="hint" id="vk-credit">音声：VOICEVOX:四国めたん、VOICEVOX:玄野武宏</p>
       </div>
       <div class="field">
         <label class="lbl" for="vsel">声</label>
@@ -622,7 +632,7 @@ function read(){
     age:num('age',14,85,35),h:num('height',130,215,170),w:num('weight',35,200,65),
     exp:+$('exp').value,weeks:+$('weeks').value,start:+$('start').value,
     lv:Object.fromEntries(ORDER.map(g=>[g,+((document.querySelector('input[name="lv-'+g+'"]:checked')||{}).value||0)])),
-    cap:+$('cap').value||0,cardioOn:$('f-cardio').checked,ntf:v('ntf'),ntfT:$('ntf-t').value,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),autonext:v('autonext'),bgm:v('bgm'),bgmvol:+$('bgmvol').value,vg:v('vg'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
+    cap:+$('cap').value||0,cardioOn:$('f-cardio').checked,ntf:v('ntf'),ntfT:$('ntf-t').value,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),autonext:v('autonext'),bgm:v('bgm'),bgmvol:+$('bgmvol').value,vg:v('vg'),vk:v('vk'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
     get focus(){return ORDER.filter(g=>this.lv[g]>0).concat(this.cardioOn?['cardio']:[])}};
 }
 (function buildParts(){
@@ -1734,7 +1744,7 @@ function snare(t,g){const s=ac.createBufferSource(),f=ac.createBiquadFilter(),e=
 function kick(t,g){const o=ac.createOscillator(),e=ac.createGain();o.frequency.setValueAtTime(120,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);e.gain.setValueAtTime(g,t);e.gain.exponentialRampToValueAtTime(.0005,t+.35);o.connect(e);e.connect(bgm.out);o.start(t);o.stop(t+.4)}
 function riser(t,dur){const s=ac.createBufferSource(),f=ac.createBiquadFilter(),e=ac.createGain();s.buffer=noise();s.loop=true;f.type='bandpass';f.Q.value=2;f.frequency.setValueAtTime(400,t);f.frequency.exponentialRampToValueAtTime(6000,t+dur);e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(.07,t+dur);s.connect(f);f.connect(e);e.connect(bgm.out);s.start(t);s.stop(t+dur+.05)}
 function bgmSched(){if(!bgm||!ac)return;const b=bgm,pr=bgmPr(),build=b.mode==='build';
- const target=b.muted?0:bgmVol()*((window.speechSynthesis&&speechSynthesis.speaking)?.45:1);
+ const target=b.muted?0:bgmVol()*(((window.speechSynthesis&&speechSynthesis.speaking)||vcBusy())?.45:1);
  b.out.gain.setTargetAtTime(target,ac.currentTime,.15);
  b.lp.frequency.setTargetAtTime(build?700+3800*pr*pr:750,ac.currentTime,.3);
  const left=bgmLeft();if(build&&!b.riser&&left<=8&&left>1){b.riser=true;riser(ac.currentTime+.05,left-.3)}
@@ -1769,13 +1779,55 @@ function vparm(kind,v){const g=gen(),p=PRE[g][lvl()];let pitch=p[0]+offv('vpitch
   const c=x=>Math.round(Math.min(2,Math.max(.5,x))*1000)/1000;return {pitch:c(pitch),rate:c(rate)}}
 // t：文字列／{en,ja}／それらの配列。英語→英語の声、日本語→日本語の声で順に読む
 function say(t,cut){if(read().voice!=='on')return;try{
+  if(cut)hush();if(vcSay(t,cut))return;
   const ev=dia()==='gai'?enVoice():null,segs=[];
   const add=(v,s)=>{if(!s)return;const L=segs[segs.length-1];if(L&&L.v===v)L.t+=v==='en'?(/[.,!?]$/.test(L.t)?' ':', ')+s:'、'+s;else segs.push({v,t:s})};
   (Array.isArray(t)?t:[t]).forEach(p=>{if(p==null)return;if(typeof p!=='object'){add('ja',String(p));return}if(p.en&&ev)add('en',p.en);if(p.ja)add('ja',p.ja)});
-  if(cut)speechSynthesis.cancel();
-  segs.forEach(sg=>{const u=new SpeechSynthesisUtterance(sg.t);let v;if(sg.v==='en'){v=ev;u.lang=ev.lang}else{u.lang='ja-JP';v=jaVoice()}
+  const go=()=>(vcTts=true,segs).forEach(sg=>{const u=new SpeechSynthesisUtterance(sg.t);let v;if(sg.v==='en'){v=ev;u.lang=ev.lang}else{u.lang='ja-JP';v=jaVoice()}
     if(v)u.voice=v;const q=vparm(sg.v,v);u.pitch=q.pitch;u.rate=q.rate;speechSynthesis.speak(u)});
+  const w=vcLeft();if(w>0||vcQ.length){vcQ.push(go);if(!vcT)vcT=setTimeout(()=>{vcT=0;const q=vcQ;vcQ=[];q.forEach(f=>f())},w*1000)}else go(); // 録音の声が流れている途中なら、終わってから読む
 }catch(e){}}
+// 止める（スマホの声と録音の声の両方）
+function hush(){vcTts=false;try{speechSynthesis.cancel()}catch(e){}vcStop()}
+/* ---------- 録音の声（標準語の定型セリフだけ。VOICEVOX で作った voice/ の MP3） ---------- */
+// http/https で開いたときだけ読み込む（ファイルで開いたときや claude.ai の中では使わない）
+const VC={on:/^https?:$/.test(location.protocol)&&!window.claude&&!/(^|\.)claude\.ai$|claudeusercontent/.test(location.hostname),mp:null,b:{},ld:{},bad:0,last:''};
+let vcSrc=[],vcEnd=0,vcT=0,vcQ=[],vcDc=null,vcTts=false; // vcTts: 止めたあとにスマホの声で読み始めたか
+function vkind(){const el=document.querySelector('input[name="vk"]:checked');return el?el.value:'rec'}
+function vcWant(){return VC.on&&vkind()==='rec'&&dia()==='std'}
+function vcKey(){return gen()+lvl()}
+function vcLeft(){try{return ac&&vcEnd?Math.max(0,vcEnd-ac.currentTime):0}catch(e){return 0}}
+function vcBusy(){return vcLeft()>0}
+function vcStop(){clearTimeout(vcT);vcT=0;vcQ=[];vcSrc.forEach(s=>{try{s.stop()}catch(e){}});vcSrc=[];vcEnd=0}
+// 音声ファイルを音に戻す（古いSafari向けにコールバック形式。ac がまだなければ画面外用の箱を使う）
+function vcDecode(ab){return new Promise((ok,ng)=>{try{let c=ac;
+  if(!c){if(!vcDc){const O=window.OfflineAudioContext||window.webkitOfflineAudioContext;try{vcDc=new O(1,1,24000)}catch(e){vcDc=new O(1,1,44100)}}c=vcDc}
+  const p=c.decodeAudioData(ab,ok,ng);if(p&&p.catch)p.catch(ng)}catch(e){ng(e)}})}
+function vcMan(){if(!VC.mp)VC.mp=fetch('voice/manifest.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(m=>{if(!m||!m.packs)throw 0;return m}).catch(e=>{VC.mp=null;throw e});return VC.mp}
+function vcLoad(){try{if(!vcWant()||VC.bad>Date.now())return;const k=vcKey();if(VC.b[k]||VC.ld[k])return;
+  VC.ld[k]=vcMan().then(m=>{const p=m.packs[k];if(!p||!p.clips)throw 0;return fetch('voice/'+p.file,{cache:'no-cache'}).then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()}).then(vcDecode).then(B=>{
+      const prev=VC.last;VC.b[k]={B,c:p.clips};VC.last=k;Object.keys(VC.b).forEach(x=>{if(x!==k&&x!==prev)delete VC.b[x]})})}) // 覚えておくのは今と1つ前の分だけ
+    .catch(()=>{VC.bad=Date.now()+60000}).then(()=>{delete VC.ld[k];vcUI()});
+  vcUI()}catch(e){}}
+// 全部の言葉に録音があるときだけ録音で流す（1つでもなければ false＝スマホの声）。順番待ちは前の録音の後ろにつなぐ
+function vcSay(t,cut){try{
+  if(!vcWant()||!ac||ac.state==='closed'||ac.state==='interrupted')return false;const P_=VC.b[vcKey()];if(!P_)return false;
+  if(!cut&&(vcQ.length||(vcTts&&window.speechSynthesis&&(speechSynthesis.speaking||speechSynthesis.pending))))return false; // スマホの声が話している最中なら順番を守ってスマホの声で
+  const cs=[];for(const p of (Array.isArray(t)?t:[t])){if(p==null)continue;if(typeof p==='object')return false;const c=P_.c[String(p)];if(!c)return false;cs.push(c)}
+  if(!cs.length)return false;
+  if(ac.state==='suspended')try{ac.resume()}catch(e){}
+  let at=Math.max(ac.currentTime+.03,vcEnd||0);
+  cs.forEach(c=>{const s=ac.createBufferSource();s.buffer=P_.B;s.connect(ac.destination);s.onended=()=>{vcSrc=vcSrc.filter(x=>x!==s)};s.start(at,c[0],c[1]);vcSrc.push(s);at+=Math.max(.05,c[1]-.08)});
+  vcEnd=at+.08;return true}catch(e){return false}}
+function vcUI(){const n=$('vk-note');if(!n)return;let t;
+  if(!VC.on)t='このページでは使えないので、スマホの声で読みます。';
+  else if(vkind()!=='rec')t='スマホに入っている声で読みます。';
+  else if(dia()!=='std')t='方言・外国人風はスマホの声で読みます。';
+  else if(VC.b[vcKey()])t='きれいな声で読みます。'+(aiMode()?'AIが作ったセリフはスマホの声で読みます。':'方言・AIセリフはスマホの声で読みます。');
+  else if(VC.ld[vcKey()])t='きれいな声を読み込み中…（終わるまではスマホの声で読みます）';
+  else if(VC.bad>Date.now())t='きれいな声を読み込めませんでした。スマホの声で読みます。';
+  else t='きれいな声を準備しています…';
+  n.textContent=t}
 function spk(s){const m=Math.floor(s/60),x=s%60;return (m?m+'分':'')+(x?x+'秒':'')}
 /* ---------- 声でカウント ---------- */
 const cv=document.createElement('div');cv.className='restv cntv';cv.hidden=true;cv.setAttribute('role','dialog');cv.setAttribute('aria-label','回数カウント');
@@ -1784,7 +1836,7 @@ document.body.appendChild(cv);
 let cTm=0,cRow=null,cN=0,cGoal=10,cRaf=0,cPh0=0,cPhLen=1,cOn=false;
 function cFill(){if(!cOn)return;const fr=Math.min(1,(performance.now()-cPh0)/cPhLen);$('cv-fill').style.height=Math.min(100,(cN+fr)/cGoal*100)+'%';cRaf=requestAnimationFrame(cFill)}
 function startCount(tr){
-  ensureAudio();stopTimer();clearTimeout(cTm);cancelAnimationFrame(cRaf);aiAuto();cPaused=false;$('cv-pause').textContent='一時停止';
+  ensureAudio();vcLoad();stopTimer();clearTimeout(cTm);cancelAnimationFrame(cRaf);aiAuto();cPaused=false;$('cv-pause').textContent='一時停止';
   const sets=+tr.dataset.sets,done=tr.querySelectorAll('.sd.on').length;
   if(done>=sets){say('この種目は、全セット終わっています',true);return}
   cRow=tr;cGoal=Math.max(1,+tr.querySelector('.in-r').value||10);cN=0;cOn=false;
@@ -1814,7 +1866,7 @@ function rep_(){
 }
 function finishCount(n,record){
   clearTimeout(cTm);cOn=false;cancelAnimationFrame(cRaf);cv.hidden=true;
-  if(record===false){speechSynthesis&&speechSynthesis.cancel();return}
+  if(record===false){hush();return}
   say(L(n>=cGoal?'done':'early',cRow&&cRow.dataset.ex),true);
   if(!cRow||n<=0)return;
   const tr=cRow;tr.querySelector('.in-r').value=n;
@@ -1825,7 +1877,7 @@ $('cv-done').addEventListener('click',()=>finishCount(cN));
 $('cv-x').addEventListener('click',()=>{autoRow=null;cPaused=false;finishCount(cN,false)});
 let cPaused=false;
 $('cv-pause').addEventListener('click',()=>{
-  if(!cPaused){cPaused=true;clearTimeout(cTm);cOn=false;cancelAnimationFrame(cRaf);try{speechSynthesis.cancel()}catch(e){}$('cv-ph').textContent='一時停止中';$('cv-pause').textContent='再開'}
+  if(!cPaused){cPaused=true;clearTimeout(cTm);cOn=false;cancelAnimationFrame(cRaf);hush();$('cv-ph').textContent='一時停止中';$('cv-pause').textContent='再開'}
   else{cPaused=false;$('cv-pause').textContent='一時停止';cOn=true;cFill();say('再開',true);rep_()}});
 document.addEventListener('click',e=>{const b=e.target.closest('.cbtn');if(b)startCount(b.closest('tr'))});
 function offLbl(x){x=Math.round(+x*100)/100;return !x?'自動':(x>0?'+':'−')+Math.abs(x).toFixed(2)}
@@ -1954,7 +2006,7 @@ function load(){
   try{
     const set=(n,v)=>{const el=document.querySelector('input[name="'+n+'"][value="'+v+'"]');if(el)el.checked=true;};
     if(s.ntf)set('ntf',s.ntf);if(s.ntfT)$('ntf-t').value=s.ntfT;if(s.autonext)set('autonext',s.autonext);if(s.bgm)set('bgm',s.bgm);if(s.bgmvol)$('bgmvol').value=s.bgmvol;
-    if(s.pro)set('pro',s.pro);if(s.voice)set('voice',s.voice);if(s.tempo)set('tempo',s.tempo);if(s.sdo!=null)$('sdo').value=Math.min(4,+s.sdo+(s.sv2?0:1));if(s.vg)set('vg',s.vg);if(s.dia)set('dia',s.dia);if(s.lines)set('lines',s.lines);const ok=x=>isFinite(+x)&&x!==null&&x!==''&&Math.abs(+x)<=0.2001?+x:0;$('vpitch').value=ok(s.vp);$('vrate').value=ok(s.vr);if(s.vname)pendingVoice=s.vname;
+    if(s.pro)set('pro',s.pro);if(s.voice)set('voice',s.voice);if(s.tempo)set('tempo',s.tempo);if(s.sdo!=null)$('sdo').value=Math.min(4,+s.sdo+(s.sv2?0:1));if(s.vg)set('vg',s.vg);if(s.vk)set('vk',s.vk);if(s.dia)set('dia',s.dia);if(s.lines)set('lines',s.lines);const ok=x=>isFinite(+x)&&x!==null&&x!==''&&Math.abs(+x)<=0.2001?+x:0;$('vpitch').value=ok(s.vp);$('vrate').value=ok(s.vr);if(s.vname)pendingVoice=s.vname;
     set('sex',s.sex);set('goal',s.goal);set('days',s.days);set('eq',s.eq);
     $('age').value=s.age;$('height').value=s.h;$('weight').value=s.w;$('exp').value=s.exp;if(s.start!=null)$('start').value=s.start;$('weeks').value=s.weeks;
     if(s.lv) ORDER.forEach(g=>{const el=$('lv-'+g+'-'+(s.lv[g]||0));if(el)el.checked=true;});
@@ -1989,6 +2041,8 @@ sdoLabel();vvLabel();
 $('mbar-go').addEventListener('click',()=>out.scrollIntoView({behavior:'smooth',block:'start'}));
 document.querySelector('aside').addEventListener('input',render);
 document.querySelector('aside').addEventListener('change',render);
+document.querySelector('aside').addEventListener('change',e=>{if(e.target&&/^(vk|vg|dia|lines)$|^sdo$/.test(e.target.name||e.target.id)){vcLoad();vcUI()}});
+vcUI();setTimeout(vcLoad,1200); // 画面が落ち着いてから、今の声の分だけ先に読み込む
 render();
 })();
 </script>
