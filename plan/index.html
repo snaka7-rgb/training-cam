@@ -363,7 +363,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <header class="top">
     <h1>トレーニング計画メーカー</h1>
     <p>体格・目的・期間から、週ごとのメニューと食事の目安を組み立てます</p>
-    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.3.1（2026/11/12）</p>
+    <p class="hint" id="appver" style="margin-top:4px">バージョン 2.4（2026/11/13）</p>
     <div class="updrow"><button type="button" class="updb" id="upd">最新版か確かめる</button><span id="upd-st" role="status" aria-live="polite"></span></div>
   </header>
   <div class="grid">
@@ -408,19 +408,21 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div class="field">
         <span class="lbl">週のトレーニング日数</span>
         <div class="seg dn">
+          <label><input type="radio" name="days" id="d0" value="auto" checked><span>おまかせ</span></label>
           <label><input type="radio" name="days" id="d2" value="2"><span>2日</span></label>
           <label><input type="radio" name="days" id="d3" value="3"><span>3日</span></label>
-          <label><input type="radio" name="days" id="d4" value="4" checked><span>4日</span></label>
+          <label><input type="radio" name="days" id="d4" value="4"><span>4日</span></label>
           <label><input type="radio" name="days" id="d5" value="5"><span>5日</span></label>
           <label><input type="radio" name="days" id="d6" value="6"><span>6日</span></label>
         </div>
+        <p class="hint">おまかせ：曜日も回数も決めずに、行けた日に「今日やる」を押すだけ。最近来ている回数に合わせて、週の区切りでメニューの分け方を変えます。</p>
       </div>
       <div class="field">
         <label class="lbl" for="start">開始曜日</label>
         <select id="start">
           <option value="1">月曜</option><option value="2">火曜</option><option value="3">水曜</option><option value="4">木曜</option><option value="5">金曜</option><option value="6" selected>土曜</option><option value="0">日曜</option>
         </select>
-        <p class="hint">行ける日は、計画の各週の上にある曜日のボタンで、あとから週ごとに変えられます。</p>
+        <p class="hint">日数を決めたときは、行ける日を計画の各週の上の曜日のボタンで、週ごとに変えられます。おまかせのときは使いません（その日に始めます）。</p>
       </div>
       <div class="field">
         <label class="lbl" for="cap">1日の種目数の上限</label>
@@ -628,12 +630,18 @@ let selWeek=0;
 function read(){
   const v=n=>document.querySelector('input[name="'+n+'"]:checked').value;
   const num=(id,lo,hi,def)=>{const x=parseFloat($(id).value);return isFinite(x)?Math.min(hi,Math.max(lo,x)):def};
-  return {sex:v('sex'),goal:v('goal'),days:+v('days'),eq:v('eq'),
+  const dv=v('days'),auto=dv==='auto';
+  const o={sex:v('sex'),goal:v('goal'),days:auto?3:(+dv||4),auto,eq:v('eq'),
     age:num('age',14,85,35),h:num('height',130,215,170),w:num('weight',35,200,65),
     exp:+$('exp').value,weeks:+$('weeks').value,start:+$('start').value,
     lv:Object.fromEntries(ORDER.map(g=>[g,+((document.querySelector('input[name="lv-'+g+'"]:checked')||{}).value||0)])),
     cap:+$('cap').value||0,cardioOn:$('f-cardio').checked,ntf:v('ntf'),ntfT:$('ntf-t').value,pro:v('pro'),voice:v('voice'),tempo:+v('tempo'),autonext:v('autonext'),bgm:v('bgm'),bgmvol:+$('bgmvol').value,vg:v('vg'),vk:v('vk'),sv2:1,dia:v('dia'),lines:(document.querySelector('input[name="lines"]:checked')||{}).value||'fixed',vp:offv('vpitch'),vr:offv('vrate'),vname:$('vsel').value||pendingVoice,sdo:+$('sdo').value,
     get focus(){return ORDER.filter(g=>this.lv[g]>0).concat(this.cardioOn?['cardio']:[])}};
+  // おまかせ：始める前は「今日」が計画の初日。週の数は今の週のもの
+  if(auto&&!ANCH){o.start=today0().getDay();if(+$('start').value!==o.start)$('start').value=o.start}
+  $('start').disabled=auto; // おまかせでは開始曜日を動かさない（週の区切りがずれて、過ぎた週の日付が変わらないように）
+  o.cw=Math.max(0,Math.min(o.weeks-1,curWk(o)));if(auto)o.days=nOf(o,o.cw);
+  return o;
 }
 (function buildParts(){
   const def={chest:2,back:1};
@@ -699,7 +707,7 @@ function compute(s){
   if(s.age>=50) notes.push('50歳以上の設定として、セット数を1割減らし、余力を多めに残すようにしています。ウォームアップは10分以上が目安です。');
   if(s.weeks<=4) notes.push('1か月では筋力やフォームは伸びますが、見た目の変化はまだ小さい時期です。続ける場合は期間を延ばすと回復週・測定週まで組み込まれます。');
   if(s.eq==='bw'&&s.goal==='hyp'&&s.exp===2) notes.push('上級者の筋肥大は自重だけだと負荷不足になりやすいです。リュックに荷物を入れるなどで加重してください。');
-  if(s.goal==='hyp'&&s.days===2) notes.push('週2日でも伸びますが、各部位を週2回刺激できる週3日以上のほうが効率的です。');
+  if(s.goal==='hyp'&&s.days===2&&!s.auto) notes.push('週2日でも伸びますが、各部位を週2回刺激できる週3日以上のほうが効率的です。');
 
   // 見込み
   let monthly=(s.sex==='m'?[.9,.45,.2]:[.45,.22,.1])[s.exp];
@@ -771,10 +779,10 @@ function reps(goal,kind,g){
 }
 
 function buildWeek(s,R,w){
-  const mult=multFor(w), freq={};
-  R.split.forEach(d=>d.groups.forEach(g=>freq[g]=(freq[g]||0)+1));
+  const mult=multFor(w), freq={}, split=splitFor(nOf(s,w.i));
+  split.forEach(d=>d.groups.forEach(g=>freq[g]=(freq[g]||0)+1));
   const seen={};
-  return R.split.map((d,di)=>{
+  return split.map((d,di)=>{
     const rows=[];
     d.groups.forEach(g=>{
       const k=seen[g]=(seen[g]||0)+1;
@@ -805,8 +813,9 @@ function cardioText(s,R,w,idx){
   const ivN=Math.min(6,3+Math.floor(loadIdx/3));
   if(R.cardio){
     if(idx===0) return '有酸素：ゾーン2（会話できる強度）'+z2+'分';
-    if(idx===R.split.length-1) return w.type==='deload'?'有酸素：ゾーン2 '+z2+'分（インターバルは休み）':'有酸素：4分きつめ＋3分ゆっくり × '+ivN+'本';
-    if(R.split.length>=4&&idx===2) return '有酸素：ゾーン2 '+Math.round(z2*.7/5)*5+'分';
+    const sn=nOf(s,w.i);
+    if(idx===sn-1) return w.type==='deload'?'有酸素：ゾーン2 '+z2+'分（インターバルは休み）':'有酸素：4分きつめ＋3分ゆっくり × '+ivN+'本';
+    if(sn>=4&&idx===2) return '有酸素：ゾーン2 '+Math.round(z2*.7/5)*5+'分';
     return '';
   }
   return '';
@@ -839,7 +848,7 @@ function render(){
   const maxV=Math.max(...Object.values(R.vol),22);
 
   let h='';
-  h+='<div class="plan-head"><span class="eyebrow">'+s.weeks+'週間プログラム ・ '+EXPN[s.exp]+' ・ 週'+s.days+'日</span>';
+  h+='<div class="plan-head"><span class="eyebrow">'+s.weeks+'週間プログラム ・ '+EXPN[s.exp]+' ・ '+(s.auto?'おまかせ（今週は'+s.days+'メニュー）':'週'+s.days+'日')+'</span>';
   h+='<h2>'+GOALN[s.goal]+(s.goal==='hyp'?'（ナチュラル）':'')+'プラン</h2>';
   h+='<p>重点：'+(fnames.length?fnames.join('・'):'全身をバランスよく')+'</p></div>';
 
@@ -864,8 +873,11 @@ function render(){
   if(w.type==='test') h+='<p class="hint" style="margin:-4px 0 12px">各日の最初の多関節種目で「その重量で何回できたか」を記録し、第1週と比べてください。</p>';
   h+='<div class="days">';
   const TK=ymd(today0());
-  days.map((d,i)=>i).filter(i=>days[i].off!=null).sort((a,b)=>days[a].off-days[b].off).forEach(i=>{
+  const AU=s.auto&&!AUTO.fx[selWeek],rs=AU?rotStart(s,selWeek,days.length):0,rk=i=>days[i].off!=null?days[i].off:7+(i-rs+days.length)%days.length;
+  const tn=dd(today0(),firstDay(s)),tOff=Math.floor(tn/7)===selWeek?tn%7:-1,oo=offs(s,selWeek),tdi=tOff>=0?oo.indexOf(tOff):-1,tBusy=tdi>=0&&menuDone(days,selWeek,tdi)>0;
+  days.map((d,i)=>i).filter(i=>AU||days[i].off!=null).sort((a,b)=>rk(a)-rk(b)).forEach(i=>{
     const d=days[i],D=dayRows(s,days,selWeek,i,fold),isT=D.t===TK,rows=D.rows;
+    if(AU&&d.off==null){d.dow='・';d.date=menuDone(days,selWeek,i)?'やった日：記録あり':'まだ';}
     const tot=rows.reduce((a,x)=>a+x.r.sets,0),dn=rows.reduce((a,x)=>a+Math.min(x.r.sets,DONE[x.key]||0),0);
     h+='<article class="day" data-wk="'+selWeek+'" data-di="'+i+'" data-name="'+d.name+'" data-dow="'+d.dow+'"><div class="day-h"><span class="dow">'+d.dow+'</span><div><b>'+d.name+' <span style="font-weight:400;color:var(--muted);font-size:12px">'+d.date+(isT?' ・ 今日':'')+'</span></b><small>'+d.groups.map(g=>G[g]).join('・')+'</small></div><span class="prog'+(dn>=tot?' all':'')+'" data-tot="'+tot+'">'+dn+'/'+tot+'</span></div><table class="ex"><tbody>';
     rows.forEach((x,n)=>{const p=rows[n-1];
@@ -873,6 +885,7 @@ function render(){
       else if(x.extra&&(!p||!p.extra))h+='<tr class="cy-h"><td colspan="2">ほかの日から移した種目</td></tr>';
       h+=rowHTML(x.r,x.key,x.idx,s,w.type,x.carry)});
     h+='</tbody></table>';
+    if(AU&&tOff>=0&&!isT&&!tBusy&&!menuDone(days,selWeek,i)&&(d.off==null||d.off<tOff))h+='<div class="t-btns" style="margin-top:8px"><button type="button" class="tbig" data-pick="'+selWeek+'|'+i+'">このメニューを今日やる</button></div>';
     if(SCH.skip[D.t])h+='<p class="dnote">この日は休みにしました。種目は先の日へ回しています。</p>';
     else if(D.hid.length)h+='<p class="dnote">上限 '+D.cap+'種目のため、'+D.hid.length+'種目を先の日へ回します：'+names(D.hid.map(x=>x.r.name))+'</p>';
     const ct=cardioText(s,R,w,i); if(ct) h+='<div class="cardio">'+ct+'</div>';
@@ -925,7 +938,7 @@ function render(){
   renderToday(s,R);renderHist(s,R);ntfSync(s,R);
   out.querySelectorAll('.week').forEach(b=>b.addEventListener('click',()=>{selWeek=+b.dataset.w;render();}));
   bindPress();
-  $('mbar-t').textContent=GOALN[s.goal]+' ・ '+s.weeks+'週 ・ 週'+s.days+'日 ・ '+R.kcal.toLocaleString()+'kcal';
+  $('mbar-t').textContent=GOALN[s.goal]+' ・ '+s.weeks+'週 ・ '+(s.auto?'おまかせ':'週'+s.days+'日')+' ・ '+R.kcal.toLocaleString()+'kcal';
   if(rendered){const ph=out.querySelector('.plan-head');ph.classList.add('flash');const st=out.querySelector('.stats');st.classList.add('flash');}
   rendered=true;
   aiUI();
@@ -1172,16 +1185,47 @@ function schedOf(s,dt){const n=dd(dt,firstDay(s));if(n<0||n>=s.weeks*7)return nu
 var PKEY='training-plan-sched-v1',WDMSG='';
 var SCH=null;try{SCH=JSON.parse(localStorage.getItem(PKEY)||'null')}catch(e){}
 if(!SCH||typeof SCH!=='object'||Array.isArray(SCH))SCH={};
-['wk','lim','st','skip'].forEach(k=>{if(!SCH[k]||typeof SCH[k]!=='object'||Array.isArray(SCH[k]))SCH[k]={}});
+['wk','lim','st','skip','cd'].forEach(k=>{if(!SCH[k]||typeof SCH[k]!=='object'||Array.isArray(SCH[k]))SCH[k]={}});
 ['q','drop'].forEach(k=>{if(!Array.isArray(SCH[k]))SCH[k]=[]});
 SCH.q=SCH.q.filter(q=>q&&typeof q.name==='string'&&+q.sets>0);SCH.drop=SCH.drop.filter(d=>d&&typeof d.name==='string');
 function saveSch(){try{localStorage.setItem(PKEY,JSON.stringify(SCH))}catch(e){}}
+/* ---------- 2.4 おまかせ（週の回数を記録から決める。保存キー training-plan-auto-v1） ----------
+   wk[週]=その週のメニューの数（2〜6）。その週に初めて開いたときに決めて、あとから変えない（記録のキー 週|メニュー番号|… がずれないように）
+   fx[週]=1: 曜日を決めるモードで組んだ週（おまかせに切り替える前の週。曜日の並びをそのまま使う） */
+var XKEY='training-plan-auto-v1';var AUTO=null;try{AUTO=JSON.parse(localStorage.getItem(XKEY)||'null')}catch(e){}
+if(!AUTO||typeof AUTO!=='object'||Array.isArray(AUTO))AUTO={};
+['wk','fx'].forEach(k=>{if(!AUTO[k]||typeof AUTO[k]!=='object'||Array.isArray(AUTO[k]))AUTO[k]={}});
+Object.keys(AUTO.wk).forEach(k=>{const v=AUTO.wk[k];if(!(Number.isInteger(v)&&v>=2&&v<=6&&/^\d+$/.test(k)))delete AUTO.wk[k]});
+function saveAuto(){try{localStorage.setItem(XKEY,JSON.stringify(AUTO))}catch(e){}}
+function curWk(s){return Math.floor(dd(today0(),firstDay(s))/7)}
+// その週に記録がある（メニュー番号 di を省くと週のどれか）
+function wkDone(wk,di){const p=wk+'|'+(di==null?'':di+'|');return Object.keys(DONE).some(k=>k.indexOf(p)===0&&DONE[k]>0)}
+// その週のメニューを全部（少しでも）やったか
+function wkFull(s,wk){if(wk<0)return false;const n=nOf(s,wk);for(let di=0;di<n;di++)if(!wkDone(wk,di))return false;return true}
+// 最近の回数から、週のメニュー数を決める（記録がなければ3）
+//  減らす：2週間以上の記録があり、直近3週の回数がいまより少なく、前の週を全部はやっていないとき
+//  増やす：前の週と前々週を全部やり、前の週は間をあけずに続けて来ていたとき（メニューが足りなかったしるし）
+//  これからの週：今の週と同じ（その週になったときに決める）
+function autoEst(s,wk){if(s.cw!=null&&wk>s.cw)return nOf(s,s.cw);
+  const prev=wk>0?nOf(s,wk-1):0,f=firstDay(s),ws=addDays(f,wk*7),ds=histDays().filter(k=>hDone(HIST[k])>0&&pd(k)<ws);
+  let n=prev||3;
+  if(ds.length){const span=Math.min(21,dd(ws,pd(ds[0])));if(span>=14){const r=Math.round(ds.filter(k=>dd(ws,pd(k))<=21).length*7/span);if(r<n&&!wkFull(s,wk-1))n=r}}
+  // （直近4週に、1つ多い数で組んで全部はできなかった週があれば、まだ増やさない）
+  const tried=[1,2,3,4].some(i=>wk-i>=1&&AUTO.wk[wk-i]===prev+1&&AUTO.wk[wk-i-1]===prev&&!wkFull(s,wk-i));
+  if(prev&&!tried&&wkFull(s,wk-1)&&wkFull(s,wk-2)){const T=[];for(let k=0;k<7;k++){const h=HIST[ymd(addDays(f,(wk-1)*7+k))];if(h&&hDone(h)>0)T.push(k)}
+    if(T.length>=2&&(T[T.length-1]-T[0])/(T.length-1)<=7/(prev+1))n=Math.max(n,prev+1)}
+  return Math.min(6,Math.max(2,n||2))}
+// その週のメニューの数。曜日を決めるモードでは設定どおり（おまかせで記録した過去の週だけは、その週の数のまま）
+function nOf(s,wk){const v=AUTO.wk[wk];
+  if(!s.auto){if(v&&s.cw!=null&&(wk<s.cw||(wk===s.cw&&wkDone(wk))))return v;return s.days}
+  if(v)return v;const n=autoEst(s,wk);if(wk>=0&&s.cw!=null&&wk<=s.cw&&wk<s.weeks){AUTO.wk[wk]=n;saveAuto()}return n}
 function okOffs(o,n){if(!Array.isArray(o)||o.length!==n)return false;const v=o.filter(x=>x!==null);
   return v.every(x=>Number.isInteger(x)&&x>=0&&x<7)&&new Set(v).size===v.length}
 // その週の、メニューごとの日（変えていなければ元の並び）
-function offs(s,wk){const e=SCH.wk[wk];if(e&&e.n===s.days&&okOffs(e.o,s.days))return e.o;
-  const d=SCH.def;if(d&&d.n===s.days&&wk>=d.from&&okOffs(d.o,s.days))return d.o;return OFF[s.days]}
-function isCustom(s,wk){return offs(s,wk).join()!==OFF[s.days].join()}
+function offs(s,wk){const n=nOf(s,wk),e=SCH.wk[wk];if(e&&e.n===n&&okOffs(e.o,n))return e.o;
+  if(s.auto&&!AUTO.fx[wk])return Array(n).fill(null); // おまかせ：やった日だけが決まる
+  const d=SCH.def;if((!s.auto||AUTO.fx[wk])&&d&&d.n===n&&wk>=d.from&&okOffs(d.o,n))return d.o;return OFF[n]}
+function isCustom(s,wk){return !s.auto&&offs(s,wk).join()!==OFF[nOf(s,wk)].join()}
 function dateOf(s,wk,di){const o=offs(s,wk)[di];return o==null?null:addDays(firstDay(s),wk*7+o)}
 function names(a,n){n=n||4;return a.slice(0,n).join('、')+(a.length>n?' ほか'+(a.length-n)+'種目':'')}
 // 小さいほど大事（重点の部位 → 多関節 → 単関節 → ふくらはぎ・体幹）
@@ -1195,7 +1239,7 @@ function menuDone(days,wk,di){return days[di].rows.reduce((a,r,j)=>a+(DONE[wk+'|
 function qItem(r,sets,born,fl,sk){const q={g:r.g,name:r.name,sets,r:r.r,rest:r.rest,kind:r.kind,born,fl:fl||''};if(sk)q.sk=sk;return q}
 function cyKey(r,t,wk,di,k){return r.born?'cy|'+t+'|'+k+'|'+r.name:wk+'|'+di+'|c'+k+'|'+r.name}
 // 行ける日を減らした週：外したメニューの種目を、残りの日へ上限まで分ける（大事なものから）
-function foldWeek(s,days,wk){const o=offs(s,wk),res={add:{},drop:[]};if(!o.some(x=>x===null))return res;
+function foldWeek(s,days,wk){const o=offs(s,wk),res={add:{},drop:[]};if(s.auto&&!AUTO.fx[wk]||!o.some(x=>x===null))return res;
   const e=SCH.wk[wk]||{},t=pd(e.t),f=firstDay(s),room={};
   const slots=o.map((x,di)=>({di,x})).filter(a=>a.x!==null).sort((a,b)=>a.x-b.x);
   const elig=slots.filter(a=>!t||addDays(f,wk*7+a.x)>=t);
@@ -1225,17 +1269,23 @@ function unCarry(t,wk,di){const cy=CARRY[t];if(!cy||!Array.isArray(cy.rows))retu
 // 記録のないメニューを、日付の早い順に並べ直す（過ぎた日は動かさない）
 function normOffs(s,days,wk,o){const t0=dd(today0(),firstDay(s))-wk*7,free=o.map((x,di)=>di).filter(di=>!menuDone(days,wk,di)&&(o[di]===null||o[di]>=t0)),v=free.map(di=>o[di]).filter(x=>x!==null).sort((a,b)=>a-b);
   free.forEach((di,n)=>{o[di]=n<v.length?v[n]:null});return o}
-function applyWk(s,days,wk,old,o){normOffs(s,days,wk,o);const f=firstDay(s);
+function applyWk(s,days,wk,old,o){const fx=!s.auto||AUTO.fx[wk];if(fx)normOffs(s,days,wk,o);const f=firstDay(s);
   old.forEach((x,di)=>{if(x!==null&&o.indexOf(x)<0)unCarry(ymd(addDays(f,wk*7+x)),wk,di)});
-  const e={n:s.days,o};if(o.some(x=>x===null))e.t=ymd(today0());SCH.wk[wk]=e;saveSch();saveCarry()}
+  const e={n:nOf(s,wk),o};if(fx&&o.some(x=>x===null))e.t=ymd(today0());SCH.wk[wk]=e;saveSch();saveCarry()}
 // 休みの日に「今日行く」：手つかずで過ぎた日 → 外してある日 → これからの日、の順で今日へ移す
 function goYes(s,ctx,t){const n=dd(t,firstDay(s));if(n<0||n>=s.weeks*7)return null;
   const wk=Math.floor(n/7),off=n%7,days=ctx.days(wk),old=offs(s,wk),o=old.slice(),f=firstDay(s);if(o.indexOf(off)>=0)return null;let c=-1;
+  if(s.auto&&!AUTO.fx[wk]){const di=autoNext(s,wk,o,off);if(di<0)return null;o[di]=off;return {wk,days,old,o,di,name:days[di].name}}
   o.forEach((x,di)=>{if(x!==null&&x<off&&(c<0||x>o[c]))c=di});
   if(c>=0){const dk=ymd(addDays(f,wk*7+o[c]));if(menuDone(days,wk,c)||SCH.skip[dk]||(SCH.st[dk]&2))c=-1}
   if(c<0)c=o.indexOf(null);
   if(c<0)o.forEach((x,di)=>{if(x!==null&&x>off&&!menuDone(days,wk,di)&&(c<0||x<o[c]))c=di});
   if(c<0)return null;o[c]=off;normOffs(s,days,wk,o);const di=o.indexOf(off);return di<0?null:{wk,days,old,o,di,name:days[di].name}}
+// おまかせ：次にやるメニュー（前の週の続きの順番で、まだ手をつけていないもの）。今日より前に入れて手つかずのものも選び直せる
+function rotStart(s,wk,n){if(wk<1||nOf(s,wk-1)!==n)return 0;const po=offs(s,wk-1);let b=-1,bx=-1;
+  for(let di=0;di<n;di++)if(wkDone(wk-1,di)){const x=po[di]==null?-1:po[di];if(x>=bx){bx=x;b=di}}return b<0?0:(b+1)%n}
+function autoNext(s,wk,o,off){const n=o.length,st=rotStart(s,wk,n);
+  for(let j=0;j<n;j++){const di=(st+j)%n;if(!wkDone(wk,di)&&(o[di]===null||o[di]<off))return di}return -1}
 function nextSlot(s,from){for(let k=1;k<=14;k++){const dt=addDays(from,k),x=schedOf(s,dt);if(x&&!SCH.skip[ymd(dt)])return Object.assign({dt},x)}return null}
 // 日が変わったときの片付け：入らなかった分・残ったやり残しを順番待ちへ。1週間たったものは見送り。今日の空きに順番待ちを入れる
 function settle(s,R){const t=today0(),tk=ymd(t),ctx=mkCtx(s,R);let ch=false,chC=false;
@@ -1245,6 +1295,19 @@ function settle(s,R){const t=today0(),tk=ymd(t),ctx=mkCtx(s,R);let ch=false,chC=
     const cy=CARRY[dk];if(cy&&Array.isArray(cy.rows))cy.rows.forEach((r,i)=>{if(!r||r.mv||typeof r.name!=='string')return;
       const left=r.sets-Math.min(r.sets,DONE[cyKey(r,dk,x.wk,x.di,i)]||0);if(!(left>0))return;
       r.mv=1;SCH.q.push(qItem(r,left,r.born||cy.fromDate||dk,r.fl||cy.fromLabel||''));ch=chC=true})}
+  // 2.4: 途中でやめたメニューの残りを、ボタンなしで順番待ちへ（実際に記録した日を基準。予定日が今日以降のメニューはその日に続ける）
+  const cw=Math.floor(dd(t,firstDay(s))/7);Object.keys(SCH.cd).forEach(k=>{if(!(+k.split('|')[0]>=cw-2)){delete SCH.cd[k];ch=true}});
+  // 対象は「今日より前で、最後に記録した日」だけ（そのあとにもうトレーニングした日のものは、もう次の回が済んでいるので動かさない）
+  const lastD=histDays().filter(k=>k<tk&&hDone(HIST[k])>0).pop();
+  for(let k=7;k>=1;k--){const dk=ymd(addDays(t,-k)),h=HIST[dk];if(dk!==lastD||!h||!h.cards)continue;
+    Object.values(h.cards).forEach(c=>{if(!c||!Number.isInteger(c.wk)||!Number.isInteger(c.di))return;const ck=c.wk+'|'+c.di;
+      if(SCH.cd[ck]||c.wk<0||c.wk>=s.weeks||c.di>=nOf(s,c.wk))return;
+      const md_=dateOf(s,c.wk,c.di);if(md_&&md_>=t)return;if(md_&&(SCH.st[ymd(md_)]&2))return;
+      if(Object.keys(CARRY).some(q=>CARRY[q]&&CARRY[q].from===ck))return;
+      const D=ctx.rows(c.wk,c.di),reg=D.rows.filter(x=>!x.carry);if(!reg.some(x=>DONE[x.key]>0))return;
+      const fl=md(pd(dk))+' '+ctx.days(c.wk)[c.di].name;
+      reg.forEach(x=>{const left=x.r.sets-Math.min(x.r.sets,DONE[x.key]||0);if(left>0)SCH.q.push(qItem(x.r,left,dk,fl))});
+      SCH.cd[ck]=1;ch=true})}
   const keep=[];SCH.q.forEach(q=>{const b=pd(q.born);if(!b||dd(t,b)>7){SCH.drop.push({name:q.name,at:tk});ch=true}else keep.push(q)});SCH.q=keep;
   const dl=SCH.drop.filter(d=>{const a=pd(d.at);return a&&dd(t,a)<=3});if(dl.length!==SCH.drop.length){SCH.drop=dl;ch=true}
   const lim=addDays(t,-30);['lim','st','skip'].forEach(n=>Object.keys(SCH[n]).forEach(k=>{const dt=pd(k);if(!dt||dt<lim){delete SCH[n][k];ch=true}}));
@@ -1260,10 +1323,12 @@ function settle(s,R){const t=today0(),tk=ymd(t),ctx=mkCtx(s,R);let ch=false,chC=
   if(ch)saveSch();if(chC)saveCarry()}
 // 週の上に出す「行ける日」のボタン
 function wdHTML(s,days,wk,fold){const o=offs(s,wk),f=firstDay(s),tk=ymd(today0());
+  if(s.auto&&!AUTO.fx[wk]){const did=[];for(let k=0;k<7;k++){const dt=addDays(f,wk*7+k),h=HIST[ymd(dt)];if(h&&hDone(h)>0)did.push(mdw(dt))}
+    return '<p class="hint" style="margin:0 0 8px">おまかせ：行く日は決めなくて大丈夫です。行けた日に「今日やる」を押すと、次のメニューが入ります。この週は '+days.length+'つのメニューを順番に回します。'+(did.length?'この週にやった日：'+did.join('、'):'')+'</p>'+(WDMSG?'<p class="dnote" role="status">'+WDMSG+'</p>':'')}
   let h='<div class="wd" role="group" aria-label="この週の行ける日">';
   for(let k=0;k<7;k++){const dt=addDays(f,wk*7+k),on=o.indexOf(k)>=0;
     h+='<button type="button" class="wdb'+(on?' on':'')+(ymd(dt)===tk?' td':'')+'" data-wo="'+k+'" aria-pressed="'+on+'" aria-label="'+mdw(dt)+(on?' 行く日':' 休みの日')+'">'+DOW[dt.getDay()]+'<small>'+md(dt)+'</small></button>'}
-  h+='</div><p class="hint" style="margin:0 0 8px">行ける日を押して変えられます（週'+s.days+'日まで）。色のついた日がトレーニングの日です。</p>';
+  h+='</div><p class="hint" style="margin:0 0 8px">行ける日を押して変えられます（週'+o.length+'日まで）。色のついた日がトレーニングの日です。</p>';
   const un=o.map((x,di)=>x===null?days[di].name:null).filter(Boolean),ad=Object.values(fold.add).reduce((a,b)=>a+b.length,0);
   if(un.length)h+='<p class="dnote" style="margin:0 0 8px">この週は行ける日が少ないので、「'+un.join('」「')+'」'+(ad?'から '+ad+'種目を、ほかの日に上限まで足しました。':'の種目は入れられませんでした。')+(fold.drop.length?'入りきらず、この週は見送る種目：'+names(fold.drop.map(r=>r.name),6):'')+'</p>';
   const cus=isCustom(s,wk);
@@ -1294,6 +1359,9 @@ function adapt(name,planned,lo,hi,idx,wt,log,hist){
 // 初めて記録したときに計画の初日を決める（第1週の日なら「今日がその日」になるように）
 function ensureAnchor(day){if(ANCH||!day)return;const s=read(),wk=+day.dataset.wk,di=+day.dataset.di;
   const o0=wk===0?offs(s,0)[di]:null,base=o0!=null?addDays(today0(),-o0):firstDay(s);ANCH={d:ymd(base)};saveAnch()}
+// おまかせ：今日の週の、まだ日の決まっていないメニューに記録したら、そのメニューを今日にする（今日にほかのメニューがなければ）
+function autoAssign(day){const s=read();if(!s.auto)return;const wk=+day.dataset.wk,di=+day.dataset.di,n=dd(today0(),firstDay(s));
+  if(AUTO.fx[wk]||Math.floor(n/7)!==wk)return;const o=offs(s,wk).slice(),off=n%7;if(o[di]!=null||o.indexOf(off)>=0)return;o[di]=off;SCH.wk[wk]={n:nOf(s,wk),o};saveSch()}
 function hDone(h){return Object.values((h&&h.ex)||{}).reduce((a,x)=>a+(+x.done||0),0)}
 function hPct(h){return h&&h.planned?Math.min(1,hDone(h)/h.planned):0}
 function histDays(){return Object.keys(HIST).filter(k=>pd(k)&&HIST[k]&&HIST[k].ex).sort()}
@@ -1306,7 +1374,7 @@ function hComp(t,h){
   cs.forEach(c=>Object.keys(c.ex).forEach(k=>{ex[ex[k]?k+'（第'+(c.wk+1)+'週）':k]=c.ex[k]}));
   HIST[t]={wk:m.wk,day:m.di,dayName:m.dayName,dow:m.dow,planned:cs.reduce((a,c)=>a+c.planned,0),ex,cards:Object.fromEntries(cs.map(c=>[c.wk+'|'+c.di,c]))}}
 function histUpdate(tr){const day=tr.closest('.day');if(!day)return;
-  const t=ymd(new Date()),wk=+day.dataset.wk,di=+day.dataset.di,c={wk,di,dayName:day.dataset.name||'',dow:day.dataset.dow||'',planned:0,ex:{}};
+  const t=ymd(new Date()),wk=+day.dataset.wk,di=+day.dataset.di,c={wk,di,dayName:day.dataset.name||'',dow:(day.dataset.dow&&day.dataset.dow!=='・')?day.dataset.dow:DOW[new Date().getDay()],planned:0,ex:{}};
   day.querySelectorAll('tr[data-key]').forEach(r=>{const nm=r.dataset.ex,ix=+r.dataset.idx,pl=+r.dataset.sets,dn=r.querySelectorAll('.sd.on').length,le=(LOG[nm]||[]).find(e=>e.i===ix),cy=r.dataset.carry==='1';
     const o={g:r.dataset.g,plan:pl,done:dn,reps:le?le.sets.slice(0,dn).map(x=>+x||0):[],w:le?le.w:'',lo:+r.dataset.lo||0,hi:+r.dataset.hi||0};
     if(cy){o.name=nm;o.carry=1}c.planned+=pl;let k=nm+(cy?'（やり残し）':'');if(c.ex[k])k+='（2）';c.ex[k]=o});
@@ -1321,7 +1389,7 @@ function histInit(){try{
     Object.keys(LOG).forEach(n=>(LOG[n]||[]).forEach(e=>{if(!e||!pd(e.d)||!Array.isArray(e.sets)||!e.sets.length)return;const k=e.d+'|'+Math.floor(e.i);(grp[k]=grp[k]||[]).push([n,e])}));
     Object.keys(grp).forEach(k=>{const t=k.split('|')[0],i=+k.split('|')[1],wk=Math.floor(i/10),di=i%10,got={};
       const c={wk,di,dayName:'',dow:DOW[pd(t).getDay()],planned:0,ex:{}};
-      if(wk<s.weeks&&di<s.days){const d=ctx.days(wk)[di];c.dayName=d.name;c.dow=d.dow;
+      if(wk<s.weeks&&di<nOf(s,wk)){const d=ctx.days(wk)[di];c.dayName=d.name;c.dow=d.dow;
         d.rows.forEach(r=>{const e=(LOG[r.name]||[]).find(x=>Math.floor(x.i)===i&&x.d===t),[lo,hi]=range(r.r),dn=e?e.sets.length:0,pl=Math.max(r.sets,dn);
           c.ex[r.name]={g:r.g,plan:pl,done:dn,reps:e?e.sets.map(x=>+x||0):[],w:e?e.w:'',lo,hi};c.planned+=pl;if(e)got[r.name]=1})}
       grp[k].forEach(([n,e])=>{if(got[n])return;const dn=e.sets.length;c.ex[n]={g:'',plan:dn,done:dn,reps:e.sets.map(x=>+x||0),w:e.w,lo:0,hi:0};c.planned+=dn});
@@ -1331,56 +1399,48 @@ function histInit(){try{
   if(ANCH){const n=dd(today0(),firstDay(s));if(n>=0&&n<s.weeks*7)selWeek=Math.floor(n/7)}
 }catch(e){}}
 /* 今日のメニュー */
-// 直近の過去のトレーニング日（7日以内）が5割未満なら、その残り
-function missInfo(ctx){const s=ctx.s,t=today0(),tk=ymd(t);
-  for(let k=1;k<=7;k++){const dt=addDays(t,-k),x=schedOf(s,dt);if(!x)continue;
-    const p=ctx.pct(x.wk,x.di);if(p>=.5)return null;
-    const from=x.wk+'|'+x.di;
-    if((SCH.st[ymd(dt)]&2)||Object.keys(CARRY).some(q=>CARRY[q]&&CARRY[q].from===from))return null;
-    const d=ctx.days(x.wk)[x.di],rem=ctx.rows(x.wk,x.di).rows.filter(c=>!c.carry).map(c=>({r:c.r,left:c.r.sets-Math.min(c.r.sets,DONE[c.key]||0)})).filter(o=>o.left>0);
-    if(!rem.length)return null;
-    return {wk:x.wk,di:x.di,dt,p,d,rem,from}}
-  return null}
+// 2.4: 前回＝実際に記録した最後の日（予定の日ではない）。その残りをどう扱ったかを、責めない言い方で返す
+function lastInfo(tk){const ds=histDays().filter(k=>k<tk&&hDone(HIST[k])>0);if(!ds.length)return null;const L=ds[ds.length-1],h=HIST[L];
+  const cy=CARRY[tk],inT=cy&&Array.isArray(cy.rows)?cy.rows.filter(r=>r&&r.born===L&&!r.mv).length:0,inQ=SCH.q.filter(q=>q.born===L).length;
+  return {L,dt:pd(L),name:h.dayName||'',inT,inQ}}
 function renderToday(s,R){const el=$('today');if(!el)return;s=s||read();R=R||compute(s);
   const ctx=mkCtx(s,R),t=today0(),tk=ymd(t),n=dd(t,firstDay(s)),sc=schedOf(s,t),sk=!!SCH.skip[tk],nx=nextSlot(s,t),info=[];
   const nm=x=>ctx.days(x.wk)[x.di].name;
+  const LI=lastInfo(tk);
   let h='<span class="eyebrow">今日のメニュー ・ '+mdw(t)+'</span>';
   if(sc&&sk){h+='<h3>今日は休みにしました</h3><p class="t-sub">今日の「'+nm(sc)+'」は順番待ちに入れました。次のトレーニング日から、1日の上限に入る分だけ足していきます。</p><div class="t-btns"><button type="button" class="tlink" id="sk-undo">取り消して、今日やる</button></div>';
   }else if(sc){const d=ctx.days(sc.wk)[sc.di],D=ctx.rows(sc.wk,sc.di),tot=D.rows.reduce((a,x)=>a+x.r.sets,0),dn=D.rows.reduce((a,x)=>a+Math.min(x.r.sets,DONE[x.key]||0),0),lm=limOf(tk),cyN=D.rows.filter(x=>x.carry).length;
     h+='<h3>今日：第'+(sc.wk+1)+'週 '+d.dow+'曜 '+d.name+'</h3><p class="t-sub">'+D.rows.length+'種目 ・ '+(dn?dn+'/'+tot+'セット済み':tot+'セット')+(tot&&dn>=tot?' ・ 全部できました。おつかれさまでした':'')+'</p>';
     h+='<div class="t-lim" role="group" aria-label="今日の量"><span>今日の量</span>'+[['s','少なめ'],['n','ふつう'],['l','多め']].map(a=>'<button type="button" class="limb" data-lim="'+a[0]+'" aria-pressed="'+(lm===a[0])+'">'+a[1]+'</button>').join('')+'<span>上限 '+D.cap+'種目</span></div>';
-    h+='<div class="t-btns"><button type="button" class="tbig" data-open="'+sc.wk+'|'+sc.di+'">このメニューを開く</button>'+(dn<tot?'<button type="button" class="tlink" id="go-no">今日は行けない</button>':'')+'</div>';
+    h+='<div class="t-btns"><button type="button" class="tbig" data-open="'+sc.wk+'|'+sc.di+'">このメニューを開く</button>'+(s.auto&&!AUTO.fx[sc.wk]?(dn?'':'<button type="button" class="tlink" id="go-no">今日はやめておく</button>'):dn<tot?'<button type="button" class="tlink" id="go-no">今日は行けない</button>':'')+'</div>';
     if(D.hid.length)info.push('今日は上限 '+D.cap+'種目なので、'+D.hid.length+'種目を次のトレーニング日へ回します：'+names(D.hid.map(x=>x.r.name)));
-    if(cyN)info.push('やり残し '+cyN+'種目を、今日のメニューの最後に入れました。');
+    if(cyN>(LI?LI.inT:0))info.push('やり残し '+(cyN-(LI?LI.inT:0))+'種目を、今日のメニューの最後に入れました。');
+  }else if(s.auto&&n>=0&&n<s.weeks*7&&!AUTO.fx[Math.floor(n/7)]){const g=goYes(s,ctx,t);
+    if(g)h+='<h3>トレーニングする日は「今日やる」を押してください</h3><p class="t-sub">次は「'+g.name+'」です。行く日は決めなくて大丈夫です。行かない日は、そのまま休みになります。</p><div class="t-btns"><button type="button" class="tbig" id="go-yes">今日やる（'+g.name+'）</button></div>';
+    else h+='<h3>今週のメニューは全部できました</h3><p class="t-sub">おつかれさまでした。'+(Math.floor(n/7)+1<s.weeks?'次のメニューは、来週の初日（'+mdw(addDays(firstDay(s),(Math.floor(n/7)+1)*7))+'）から入ります。':'これで計画の最後の週です。')+'</p>';
   }else{const g=goYes(s,ctx,t),gb=g?'<button type="button" class="tlink" id="go-yes">今日行く（'+g.name+'を今日にする）</button>':'';
     if(n>=s.weeks*7)h+='<h3>計画の期間が終わりました</h3><p class="t-sub">おつかれさまでした。続けるときは、左の「目標期間」を延ばすか組み直してください。</p>';
     else if(nx)h+='<h3>'+(n<0?'まだ始まっていません。初日は ':'今日は休養日です。次は ')+mdw(nx.dt)+nm(nx)+'</h3><div class="t-btns"><button type="button" class="tbig" data-open="'+nx.wk+'|'+nx.di+'">このメニューを開く</button>'+gb+'</div>';
     else h+='<h3>今日は休養日です</h3>'+(gb?'<div class="t-btns">'+gb+'</div>':'');}
-  if(SCH.q.length)info.push('順番待ちの種目が '+SCH.q.length+'つあります：'+names(SCH.q.map(q=>q.name))+'。'+(nx?'次のトレーニング日（'+mdw(nx.dt)+'）から、':'')+'1日の上限に入る分だけ足します。1週間たっても入らないものは見送ります。');
+  if(s.auto){const a=AUTO.wk[s.cw],b=AUTO.wk[s.cw-1];if(a&&b&&a!==b&&!AUTO.fx[s.cw-1])info.unshift(a<b?'最近は週'+a+'回くらいなので、今週から'+(a<=3?'全身メニュー中心にしました。':'メニューを'+a+'つにしました。'):'よく来ているので、今週からメニューを'+a+'つに分けました（部位ごとに分けて、1回を軽めにしています）。')}
+  if(LI&&LI.inT)info.unshift('前回（'+md(LI.dt)+' '+LI.name+'）の残り '+LI.inT+'種目を、今日のメニューの最後に入れました。');
+  else if(LI&&LI.inQ&&!sc)info.unshift('前回（'+md(LI.dt)+' '+LI.name+'）の残り '+LI.inQ+'種目は、次にやる日に入れます。');
+  if(SCH.q.length&&!(LI&&LI.inQ&&!sc&&LI.inQ===SCH.q.length))info.push('順番待ちの種目が '+SCH.q.length+'つあります：'+names(SCH.q.map(q=>q.name))+'。'+(nx?'次のトレーニング日（'+mdw(nx.dt)+'）から、':'')+'1日の上限に入る分だけ足します。1週間たっても入らないものは見送ります。');
   if(SCH.drop.length)info.push('1週間たっても入らなかったので見送りました：'+names(SCH.drop.map(d=>d.name)));
   if(info.length)h+='<div class="t-miss">'+info.map(x=>'<p>'+x+'</p>').join('')+'</div>';
-  const m=missInfo(ctx);
-  if(m){h+='<div class="t-miss"><p>前回（'+md(m.dt)+' '+m.d.name+'）は <b>'+Math.round(m.p*100)+'%</b> でした</p>';
-    h+='<ul>'+m.rem.slice(0,4).map(o=>'<li>'+o.r.name+' 残り'+o.left+'セット</li>').join('')+(m.rem.length>4?'<li>ほか'+(m.rem.length-4)+'種目</li>':'')+'</ul><p class="t-sub">1日の上限に入る分だけ足します。入りきらない分は、次のトレーニング日へ回します。</p><div class="t-btns">'+
-      '<button type="button" class="tbig" id="carry-add">'+(sc&&!sk?'やり残しを今日から入れる':'やり残しを次回から入れる')+'</button><button type="button" class="tlink" data-open="'+m.from+'">'+(sc?'前回のメニューを開いてやり直す':'前回のメニューを開く')+'</button></div>';
-    h+='</div>'}
   el.innerHTML=h}
 function openDay(wk,di){selWeek=wk;render();const el=out.querySelector('.day[data-di="'+di+'"]');if(!el)return;
   const rm=matchMedia('(prefers-reduced-motion: reduce)').matches;el.scrollIntoView({behavior:rm?'auto':'smooth',block:'start'});
   el.classList.remove('hl');void el.offsetWidth;el.classList.add('hl');setTimeout(()=>el.classList.remove('hl'),2300)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(!b||!out.contains(b))return;const p=b.dataset.open.split('|');openDay(+p[0],+p[1])});
-document.addEventListener('click',e=>{if(!e.target.closest('#carry-add'))return;
-  const s=read(),R=compute(s),ctx=mkCtx(s,R),t=today0(),sc=schedOf(s,t),m=missInfo(ctx);if(!m)return;
-  const dk=ymd(m.dt),fl=md(m.dt)+' '+m.d.name;m.rem.forEach(o=>SCH.q.push(qItem(o.r,o.left,dk,fl)));SCH.st[dk]=(SCH.st[dk]||0)|2;saveSch();
-  if(sc&&!SCH.skip[ymd(t)])openDay(sc.wk,sc.di);else render()});
 /* 行ける日の変更・今日の量 */
 document.addEventListener('click',e=>{const b=e.target.closest('.wdb');if(!b||!out.contains(b))return;
   const s=read(),R=compute(s),wk=selWeek,days=planWeek(s,R,wk),old=offs(s,wk),o=old.slice(),k=+b.dataset.wo,di=o.indexOf(k);
   if(di>=0){if(menuDone(days,wk,di)>0){WDMSG='記録がある日は外せません。';render();return}o[di]=null}
-  else{const fr=o.indexOf(null);if(fr<0){WDMSG='週'+s.days+'日までです。先にほかの日を押して外してから、行ける日を選んでください。';render();return}o[fr]=k}
+  else{const fr=o.indexOf(null);if(fr<0){WDMSG='週'+o.length+'日までです。先にほかの日を押して外してから、行ける日を選んでください。';render();return}o[fr]=k}
   applyWk(s,days,wk,old,o);render()});
 document.addEventListener('click',e=>{const a=e.target.closest('#wd-all'),r=e.target.closest('#wd-reset');if(!a&&!r)return;const s=read(),wk=selWeek;
-  if(a){SCH.def={n:s.days,o:offs(s,wk).slice(),from:wk};WDMSG='第'+(wk+1)+'週からあとの週も、同じ曜日にしました。'}
+  if(a){SCH.def={n:nOf(s,wk),o:offs(s,wk).slice(),from:wk};WDMSG='第'+(wk+1)+'週からあとの週も、同じ曜日にしました。'}
   else{const f=firstDay(s),old=offs(s,wk).slice();
     delete SCH.wk[wk];const dfl=isCustom(s,wk);if(dfl)delete SCH.def;const nw=offs(s,wk);
     old.forEach((x,di)=>{if(x!==null&&nw.indexOf(x)<0)unCarry(ymd(addDays(f,wk*7+x)),wk,di)});saveCarry();WDMSG=dfl?'「これからの週も同じ」をやめて、もとの曜日に戻しました。':'もとの曜日に戻しました。'}
@@ -1390,6 +1450,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('.limb');if(!b||!
 document.addEventListener('click',e=>{if(!e.target.closest('#go-no'))return;
   const s=read(),R=compute(s),t=today0(),tk=ymd(t),sc=schedOf(s,t);if(!sc||SCH.skip[tk])return;
   const days=planWeek(s,R,sc.wk),old=offs(s,sc.wk),o=old.slice();let nf=-1;
+  if(s.auto&&!AUTO.fx[sc.wk]){if(!menuDone(days,sc.wk,sc.di)){o[sc.di]=null;applyWk(s,days,sc.wk,old,o)}render();return}
   for(let k=o[sc.di]+1;k<7;k++)if(o.indexOf(k)<0){nf=k;break}
   if(nf>=0&&!menuDone(days,sc.wk,sc.di)){o[sc.di]=nf;applyWk(s,days,sc.wk,old,o)}
   else{unCarry(tk,sc.wk,sc.di);SCH.skip[tk]=1;const fl=md(t)+' '+days[sc.di].name;
@@ -1398,10 +1459,20 @@ document.addEventListener('click',e=>{if(!e.target.closest('#go-no'))return;
   render()});
 document.addEventListener('click',e=>{if(!e.target.closest('#sk-undo'))return;const tk=ymd(today0());if(!SCH.skip[tk])return;
   delete SCH.skip[tk];SCH.q=SCH.q.filter(q=>q.sk!==tk);if(SCH.st[tk])SCH.st[tk]&=~1;saveSch();render()});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pick]');if(!b||!out.contains(b))return;
+  const s=read(),R=compute(s),p=b.dataset.pick.split('|'),wk=+p[0],di=+p[1],n=dd(today0(),firstDay(s));if(!s.auto||Math.floor(n/7)!==wk)return;
+  const days=planWeek(s,R,wk),old=offs(s,wk),o=old.slice(),off=n%7,dj=o.indexOf(off);
+  if(dj>=0){if(menuDone(days,wk,dj)>0){WDMSG='今日はもう「'+days[dj].name+'」を始めています。';render();return}o[dj]=null}
+  if(!ANCH){ANCH={d:ymd(today0())};saveAnch()}
+  o[di]=off;applyWk(s,days,wk,old,o);openDay(wk,di)});
 document.addEventListener('click',e=>{if(!e.target.closest('#go-yes'))return;
-  const s=read(),R=compute(s),g=goYes(s,mkCtx(s,R),today0());if(!g)return;applyWk(s,g.days,g.wk,g.old,g.o);openDay(g.wk,g.di)});
+  const s=read(),R=compute(s),g=goYes(s,mkCtx(s,R),today0());if(!g)return;
+  if(s.auto&&!ANCH){ANCH={d:ymd(today0())};saveAnch()}
+  applyWk(s,g.days,g.wk,g.old,g.o);openDay(g.wk,g.di)});
 /* これまでの記録 */
 function streakOf(ctx){const s=ctx.s,t=today0(),f=firstDay(s);let n=0,dt=t;
+  if(s.auto){let m=monday(t);const tr=mon=>{for(let k=0;k<7;k++){const h=HIST[ymd(addDays(mon,k))];if(h&&hDone(h)>0)return true}return false}; // おまかせ：1回以上やった週が何週続いているか
+    if(!tr(m))m=addDays(m,-7);for(let k=0;k<60&&tr(m);k++,m=addDays(m,-7))n++;return n}
   const sc=schedOf(s,t);if(!(sc&&ctx.pct(sc.wk,sc.di)>=.5))dt=addDays(t,-1);
   for(let k=0;k<400&&dd(dt,f)>=0;k++,dt=addDays(dt,-1)){const x=schedOf(s,dt);if(!x)continue;if(ctx.pct(x.wk,x.di)>=.5)n++;else break}
   return n}
@@ -1409,7 +1480,7 @@ function streakOf(ctx){const s=ctx.s,t=today0(),f=firstDay(s);let n=0,dt=t;
 function weekStat(ctx,mon){const t=today0();let pl=0,dn=0,nd=0;
   for(let k=0;k<7;k++){const dt=addDays(mon,k);if(dt>t)break;const h=HIST[ymd(dt)];
     if(h&&h.planned){pl+=h.planned;dn+=hDone(h);nd++}
-    else if(dt<t){const x=schedOf(ctx.s,dt);if(x&&ctx.done(x.wk,x.di)===0)pl+=ctx.tot(x.wk,x.di)}}
+    else if(dt<t&&!ctx.s.auto){const x=schedOf(ctx.s,dt);if(x&&ctx.done(x.wk,x.di)===0)pl+=ctx.tot(x.wk,x.di)}}
   return {pl,dn,nd,p:pl?Math.min(1,dn/pl):null}}
 function barSVG(ws){const W=320,H=172,L=34,Rr=6,T=18,B=30,bw=(W-L-Rr)/ws.length,Y=p=>T+(H-T-B)*(1-p);
   let g='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="週ごとの達成率（直近'+ws.length+'週）">';
@@ -1448,7 +1519,7 @@ function histDetail(s,t){const dt=pd(t),h=HIST[t],tdy=today0();if(!dt)return '';
       x+='<li>'+k+' '+e.done+'/'+e.plan+'セット'+(rp.length?' <span class="v">'+w+rp.join('・')+'</span>':'')+chip+'</li>'});
     x+='</ul>'}
   else{const sc=schedOf(s,dt),ctx=sc?mkCtx(s,compute(s)):null;
-    x+='</div><p>'+(sc?'第'+(sc.wk+1)+'週 '+ctx.days(sc.wk)[sc.di].dow+'曜 '+ctx.days(sc.wk)[sc.di].name+'の予定日'+(dt<tdy?'でしたが、この日の記録はありません。':'です。'):'記録はありません。')+'</p>'}
+    x+='</div><p>'+(sc&&!s.auto?'第'+(sc.wk+1)+'週 '+ctx.days(sc.wk)[sc.di].dow+'曜 '+ctx.days(sc.wk)[sc.di].name+'の予定日'+(dt<tdy?'でしたが、この日の記録はありません。':'です。'):'記録はありません。')+'</p>'}
   return x+'</div>'}
 function csvAll(){const L=['日付,週,曜日,種目,セット,重量,回数'];
   histDays().forEach(t=>{const h=HIST[t],dw=DOW[pd(t).getDay()],cs=h.cards?Object.values(h.cards):[{wk:h.wk,ex:h.ex}];
@@ -1462,7 +1533,7 @@ function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compu
   const pdw=pd(days[0]);
   h+='<div class="stats hstats">'+
     '<div class="stat"><span class="k">今週の達成率</span><span class="v">'+(cw.p==null?'—':Math.round(cw.p*100)+'<small>%</small>')+'</span><span class="s">'+cw.nd+'日トレーニング ・ '+cw.dn+'/'+cw.pl+'セット</span></div>'+
-    '<div class="stat"><span class="k">続けている日数</span><span class="v">'+st+'<small>日</small></span><span class="s">予定の日に半分以上できた日が続いています</span></div>'+
+    (s.auto?'<div class="stat"><span class="k">続けている週</span><span class="v">'+st+'<small>週</small></span><span class="s">1回以上トレーニングした週が続いています</span></div>':'<div class="stat"><span class="k">続けている日数</span><span class="v">'+st+'<small>日</small></span><span class="s">予定の日に半分以上できた日が続いています</span></div>')+
     '<div class="stat"><span class="k">トレーニングした日</span><span class="v">'+days.length+'<small>日</small></span><span class="s">'+md(pdw)+' から</span></div>'+
     '<div class="stat"><span class="k">累計セット</span><span class="v">'+totS+'<small>セット</small></span><span class="s">合計 '+totR.toLocaleString()+'回</span></div></div>';
   // カレンダー
@@ -1470,11 +1541,11 @@ function renderHist(s,R){const el=$('hist');if(!el)return;s=s||read();R=R||compu
   const st0=addDays(mon0,-63);
   h+='<div><p class="hsub">カレンダー（直近10週）</p><div class="hscroll"><div class="hm"><span></span>'+['月','火','水','木','金','土','日'].map(x=>'<span class="hm-d">'+x+'</span>').join('');
   for(let w=0;w<10;w++){const mon=addDays(st0,w*7);h+='<span class="hm-w">'+md(mon)+'</span>';
-    for(let k=0;k<7;k++){const dt=addDays(mon,k),dk=ymd(dt),hh=HIST[dk],fut=dt>t,p=hh?hPct(hh):0,lv=hh&&hDone(hh)>0?(p<.25?1:p<.5?2:p<.75?3:4):0,miss=!hh&&dt<t&&!!schedOf(s,dt);
+    for(let k=0;k<7;k++){const dt=addDays(mon,k),dk=ymd(dt),hh=HIST[dk],fut=dt>t,p=hh?hPct(hh):0,lv=hh&&hDone(hh)>0?(p<.25?1:p<.5?2:p<.75?3:4):0,miss=!s.auto&&!hh&&dt<t&&!!schedOf(s,dt);
       h+='<button type="button" class="c l'+lv+(dk===tk?' today':'')+(miss?' miss':'')+(HSEL===dk?' sel':'')+'" data-hd="'+dk+'"'+(fut?' disabled':'')+' aria-label="'+mdw(dt)+' '+(hh?Math.round(p*100)+'%':miss?'予定あり・記録なし':'記録なし')+'" aria-pressed="'+(HSEL===dk)+'">'+dt.getDate()+'</button>'}}
-  h+='</div></div><div class="hlg"><span>できた割合</span><span><i style="background:color-mix(in srgb,var(--p-green) 25%,var(--surface))"></i><i style="background:color-mix(in srgb,var(--p-green) 50%,var(--surface))"></i><i style="background:color-mix(in srgb,var(--p-green) 75%,var(--surface))"></i><i style="background:var(--p-green)"></i> 少ない→全部</span><span><i style="border:2px dotted var(--muted)"></i> 予定していて記録なし</span><span><i style="outline:2px solid var(--ink);outline-offset:-2px"></i> 今日</span></div>'+histDetail(s,HSEL)+'</div>';
+  h+='</div></div><div class="hlg"><span>できた割合</span><span><i style="background:color-mix(in srgb,var(--p-green) 25%,var(--surface))"></i><i style="background:color-mix(in srgb,var(--p-green) 50%,var(--surface))"></i><i style="background:color-mix(in srgb,var(--p-green) 75%,var(--surface))"></i><i style="background:var(--p-green)"></i> 少ない→全部</span>'+(s.auto?'':'<span><i style="border:2px dotted var(--muted)"></i> 予定していて記録なし</span>')+'<span><i style="outline:2px solid var(--ink);outline-offset:-2px"></i> 今日</span></div>'+histDetail(s,HSEL)+'</div>';
   // 週ごとの達成率
-  h+='<div class="chart"><p class="hsub">週ごとの達成率（直近8週・月〜日）</p><div class="hscroll">'+barSVG(ws)+'</div><p class="hint">予定していて手をつけなかった日も「できなかった分」として数えています。</p></div>';
+  h+='<div class="chart"><p class="hsub">週ごとの達成率（直近8週・月〜日）</p><div class="hscroll">'+barSVG(ws)+'</div><p class="hint">'+(s.auto?'トレーニングした日の分だけで数えています。休んだ日は数えません。':'予定していて手をつけなかった日も「できなかった分」として数えています。')+'</p></div>';
   // 種目ごとの伸び
   const names=Object.keys(LOG).filter(n=>(LOG[n]||[]).some(e=>e&&Array.isArray(e.sets)&&e.sets.some(x=>+x>0)));
   const last=n=>(LOG[n]||[]).reduce((a,e)=>String(e.d||'')>a?String(e.d||''):a,'');names.sort((a,b)=>last(b).localeCompare(last(a))||a.localeCompare(b,'ja'));
@@ -1518,7 +1589,7 @@ const NCACHE='training-plan-ntf';let ntfTimer=0,ntfWT=0;
 function ntfOK(){return /^https?:$/.test(location.protocol)&&'Notification' in window&&'serviceWorker' in navigator&&!!window.isSecureContext&&!!window.caches}
 function ntfSched(s,R){const ctx=mkCtx(s,R),t=today0(),days={};for(let k=0;k<31;k++){const dt=addDays(t,k),x=schedOf(s,dt);if(x&&!SCH.skip[ymd(dt)])days[ymd(dt)]=ctx.days(x.wk)[x.di].name}return days}
 async function ntfRead(){try{const r=await (await caches.open(NCACHE)).match('sched');return r?await r.json():null}catch(e){return null}}
-async function ntfWrite(s,R){try{const old=await ntfRead(),o={on:s.ntf==='on',time:s.ntfT||'7:00',days:ntfSched(s,R),shown:(old&&old.shown)||{}};
+async function ntfWrite(s,R){try{const old=await ntfRead(),o={on:s.ntf==='on',time:s.ntfT||'7:00',days:s.auto?{}:ntfSched(s,R),shown:(old&&old.shown)||{}};
   await (await caches.open(NCACHE)).put('sched',new Response(JSON.stringify(o),{headers:{'content-type':'application/json'}}));return o}catch(e){return null}}
 async function ntfCheck(){try{const reg=await navigator.serviceWorker.ready;if(reg.active)reg.active.postMessage({type:'ntf-check'})}catch(e){}}
 function ntfArm(s){clearTimeout(ntfTimer);ntfTimer=0;if(s.ntf!=='on')return;const [h,m]=String(s.ntfT||'7:00').split(':').map(Number),at=new Date();at.setHours(h,m||0,0,0);let ms=at-Date.now();if(ms<0)ms+=864e5;
@@ -1527,6 +1598,7 @@ async function ntfPeriodic(on){try{const reg=await navigator.serviceWorker.ready
   const st=await navigator.permissions.query({name:'periodic-background-sync'});if(st.state==='granted')await reg.periodicSync.register('ntf-daily',{minInterval:6*3600e3})}catch(e){}}
 function ntfUI(s){const el=$('ntf-st');if(!el)return;$('ntf-t').disabled=s.ntf!=='on';
   if(!ntfOK()){el.textContent=location.protocol==='file:'?'通知は、公開ページ（https）を開いたときに使えます。ホーム画面に追加しておくと確実です。':'このブラウザでは通知が使えません。';return}
+  if(s.auto){el.textContent='おまかせのときは行く日を決めないので、朝のお知らせは出ません。お知らせがほしいときは、週のトレーニング日数を決めてください。';return}
   if(s.ntf!=='on'){el.textContent='トレーニング予定の日に「今日は○○の日」と知らせます。';return}
   const p=Notification.permission,sa=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
   if(p==='denied')el.textContent='通知がブラウザで拒否されています。スマホの設定で、このサイトの通知を許可してください。';
@@ -1538,7 +1610,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#ntf-ask'))return;tr
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&read().ntf==='on')ntfCheck()});
 // 記録の保存と復元（別の端末へ移す・消えたときに戻す）
 const BK_APP='training-plan-maker';let bkPending=null;
-function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY,weight:WKEY,sched:PKEY}}
+function bkKeys(){return {settings:KEY,done:DKEY,log:LKEY,history:HKEY,start:SKEY,carry:CKEY,tempo:TKEY,weight:WKEY,sched:PKEY,auto:XKEY}}
 function bkHTML(){return '<div class="chart" id="bk"><p class="hsub">記録の保存と復元</p><p class="hint">機種変更のときや、記録が消えたときのために、設定と記録を1つのファイルに保存できます。読み込むと、この端末の記録はファイルの内容に置き換わります。</p><div class="hbtns"><button type="button" class="tbig" id="bk-save">ファイルに保存</button><button type="button" class="tbig" id="bk-open">ファイルから復元</button></div><input type="file" id="bk-file" accept=".json,application/json" hidden aria-label="保存ファイルを選ぶ"><div id="bk-st" role="status" aria-live="polite"></div></div>'}
 function bkSafe(x){if(typeof x==='string')return !/[<>"'`]/.test(x);if(Array.isArray(x))return x.every(bkSafe);if(x&&typeof x==='object')return Object.keys(x).every(k=>bkSafe(k)&&bkSafe(x[k]));return x===null||typeof x==='number'||typeof x==='boolean'}
 function bkParse(txt){let o;try{o=JSON.parse(txt)}catch(e){return null}
@@ -1597,7 +1669,7 @@ document.addEventListener('click',e=>{
   const day=tr.closest('.day'),pg=day.querySelector('.prog');let dn=0;
   day.querySelectorAll('tr[data-key]').forEach(r=>dn+=r.querySelectorAll('.sd.on').length);
   pg.textContent=dn+'/'+pg.dataset.tot;pg.classList.toggle('all',dn>=+pg.dataset.tot);
-  try{ensureAnchor(day);histUpdate(tr);renderToday();renderHist()}catch(err){}
+  try{ensureAnchor(day);autoAssign(day);histUpdate(tr);renderToday();renderHist()}catch(err){}
   if(next>cur){
     if(next<sets)startTimer(+tr.dataset.rest,tr.dataset.ex,sets,next);
     else{stopTimer();vib(200);say(L('allDone',tr.dataset.ex));}
@@ -1924,7 +1996,7 @@ function hsh(t){let h=5381;for(let i=0;i<t.length;i++)h=(h*33+t.charCodeAt(i))>>
 function aiCtx(){
   const s=read(),R=compute(s),wk=Math.min(selWeek,s.weeks-1),w=R.ph[wk],days=buildWeek(s,R,w);
   const t0=new Date();t0.setHours(0,0,0,0);const f0=firstDay(s);
-  let di=days.findIndex((d,i)=>addDays(f0,w.i*7+OFF[s.days][i]).getTime()===t0.getTime());if(di<0)di=0;
+  const o0=offs(s,w.i);let di=days.findIndex((d,i)=>o0[i]!=null&&addDays(f0,w.i*7+o0[i]).getTime()===t0.getTime());if(di<0)di=0;
   const d=days[di],names=d.rows.map(r=>r.name);
   return {s,d,rows:d.rows,names,key:[ymd(t0),gen(),lvl(),dia(),wk,di,hsh(names.join('/'))].join('|')}}
 function aiHave(){return aiMode()&&!!AIC&&!!AIC.data&&AIC.key===aiCtx().key}
@@ -2002,12 +2074,14 @@ const KEY='training-plan-maker-v2';
 function save(s){try{localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
 function load(){
   let s=null;try{s=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
-  if(!s) return;
+  if(!s){ // 設定が保存されていない：記録もなければ新しい人（おまかせのまま）。記録だけ残っているときは以前の既定（週4日）
+    try{if(['training-plan-done-v1','training-plan-log-v1','training-plan-history-v1'].some(k=>{const v=localStorage.getItem(k);return v&&v!=='{}'&&v!=='null'}))$('d4').checked=true}catch(e){}
+    return}
   try{
     const set=(n,v)=>{const el=document.querySelector('input[name="'+n+'"][value="'+v+'"]');if(el)el.checked=true;};
     if(s.ntf)set('ntf',s.ntf);if(s.ntfT)$('ntf-t').value=s.ntfT;if(s.autonext)set('autonext',s.autonext);if(s.bgm)set('bgm',s.bgm);if(s.bgmvol)$('bgmvol').value=s.bgmvol;
     if(s.pro)set('pro',s.pro);if(s.voice)set('voice',s.voice);if(s.tempo)set('tempo',s.tempo);if(s.sdo!=null)$('sdo').value=Math.min(4,+s.sdo+(s.sv2?0:1));if(s.vg)set('vg',s.vg);if(s.vk)set('vk',s.vk);if(s.dia)set('dia',s.dia);if(s.lines)set('lines',s.lines);const ok=x=>isFinite(+x)&&x!==null&&x!==''&&Math.abs(+x)<=0.2001?+x:0;$('vpitch').value=ok(s.vp);$('vrate').value=ok(s.vr);if(s.vname)pendingVoice=s.vname;
-    set('sex',s.sex);set('goal',s.goal);set('days',s.days);set('eq',s.eq);
+    set('sex',s.sex);set('goal',s.goal);set('days',s.auto?'auto':s.days);set('eq',s.eq);
     $('age').value=s.age;$('height').value=s.h;$('weight').value=s.w;$('exp').value=s.exp;if(s.start!=null)$('start').value=s.start;$('weeks').value=s.weeks;
     if(s.lv) ORDER.forEach(g=>{const el=$('lv-'+g+'-'+(s.lv[g]||0));if(el)el.checked=true;});
     $('f-cardio').checked=!!s.cardioOn;
@@ -2051,6 +2125,17 @@ getSample();
 try{pickVoice();fillVoices()}catch(e){}
 sdoLabel();vvLabel();
 $('mbar-go').addEventListener('click',()=>out.scrollIntoView({behavior:'smooth',block:'start'}));
+// 2.4: 開いたまま日付が変わったら、今日の週を開き直して片付けをやり直す
+let shownDay=ymd(today0());
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||ymd(today0())===shownDay)return;shownDay=ymd(today0());
+  try{const s=read();if(ANCH||s.auto){const n=curWk(s);if(n>=0&&n<s.weeks)selWeek=n}}catch(e){}render()});
+// 2.4: 「週の日数」を切り替えたとき、これまでの週の組み方を残す（記録のキー 週|メニュー番号|… がずれないように）
+let modeWas=null;try{const v=document.querySelector('input[name="days"]:checked').value;modeWas={auto:v==='auto',days:+v||4}}catch(e){}
+document.querySelector('aside').addEventListener('change',e=>{if(!e.target||e.target.name!=='days')return;const pre=Object.assign({},AUTO.wk),s=read(),was=modeWas;modeWas={auto:s.auto,days:s.days};
+  if(!was||was.auto===s.auto)return;const cw=s.cw;
+  if(s.auto){for(let w=0;w<=cw;w++){if(w===cw&&!wkDone(w))break;if(pre[w]==null){AUTO.wk[w]=was.days;AUTO.fx[w]=1}}} // 曜日で組んでいた週は、その形のまま
+  else{if(AUTO.wk[cw]&&!wkDone(cw)){delete AUTO.wk[cw];delete AUTO.fx[cw]}}
+  saveAuto()},true);
 document.querySelector('aside').addEventListener('input',render);
 document.querySelector('aside').addEventListener('change',render);
 document.querySelector('aside').addEventListener('change',e=>{if(e.target&&/^(vk|vg|dia|lines)$|^sdo$/.test(e.target.name||e.target.id)){vcLoad();vcUI()}});
